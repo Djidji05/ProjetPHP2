@@ -1,0 +1,297 @@
+/* Dashboard Styles */
+:root {
+  --primary-color: #4154f1;
+  --secondary-color: #717ff5;
+  --success-color: #2ecc71;
+  --danger-color: #e74c3c;
+  --warning-color: #f39c12;
+  --info-color: #3498db;
+  --light-color: #f8f9ff;
+  --dark-color: #2c3e50;
+  --text-color: #444444;
+  --border-color: #e0e0e0;
+  --card-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+  --transition: all 0.3s ease;
+}
+
+/* Dashboard Layout */
+.dashboard {
+  padding: 20px;
+  transition: var(--transition);
+}
+
+/* Cards */
+.dashboard-card {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--card-shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-card .card-title {
+  color: var(--dark-color);
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.dashboard-card .card-icon {
+  font-size: 2rem;
+  color: var(--primary-color);
+  margin-bottom: 15px;
+}
+
+/* Stats Cards */
+.stats-card {
+  text-align: center;
+  padding: 25px 15px;
+}
+
+.stats-card .stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: 10px 0;
+  display: block;
+}
+
+.stats-card .stat-label {
+  color: var(--text-color);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Recent Activity */
+.recent-activity {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recent-activity li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+}
+
+.recent-activity li:last-child {
+  border-bottom: none;
+}
+
+.recent-activity .activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--light-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  color: var(--primary-color);
+}
+
+/* Buttons */
+.btn-dashboard {
+  padding: 8px 20px;
+  border-radius: 5px;
+  font-weight: 500;
+  transition: var(--transition);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--secondary-color);
+  color: white;
+}
+
+/* Tables */
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dashboard-table th {
+  background: var(--light-color);
+  color: var(--dark-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.dashboard-table tr:hover {
+  background: rgba(65, 84, 241, 0.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 10px;
+  }
+  
+  .dashboard-card {
+    padding: 15px;
+  }
+  
+  .stats-card .stat-number {
+    font-size: 1.5rem;
+  }
+}
+
+/* Status Badges */
+.badge {
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-success {
+  background: rgba(46, 204, 113, 0.1);
+  color: var(--success-color);
+}
+
+.badge-warning {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--warning-color);
+}
+
+.badge-danger {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--danger-color);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Styles pour le menu déroulant personnalisé */
+.has-dropdown {
+  position: relative;
+  cursor: pointer;
+}
+
+.sidebar-submenu {
+  display: none;
+  padding-left: 15px;
+  list-style: none;
+  margin: 0;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar-submenu.show-submenu {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  height: auto !important;
+  transform: translateY(0) !important;
+  animation: fadeIn 0.3s ease;
+}
+
+.sidebar-submenu li {
+  padding: 0.5rem 1rem;
+  position: relative;
+}
+
+.sidebar-submenu a {
+  color: #fff !important;
+  text-decoration: none;
+  display: flex !important;
+  align-items: center;
+  padding: 0.5rem 1rem !important;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  margin: 0.2rem 0;
+}
+
+.sidebar-submenu a:hover {
+  color: #86b7fe !important;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-submenu i {
+  margin-right: 0.5rem;
+  font-size: 0.9em;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Animation d'ouverture */
+@keyframes fadeIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Assure que le sous-menu reste au-dessus des autres éléments */
+#sidebar {
+  overflow: visible !important;
+}
+
+.nav-item {
+  position: relative;
+}
+
+/* Correction pour l'alignement des icônes */
+.nav-link {
+  display: flex !important;
+  align-items: center;
+}
+
+.nav-link i:last-child {
+  margin-left: auto;
+}

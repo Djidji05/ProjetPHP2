@@ -1,0 +1,70 @@
+<?php
+require_once 'classes/Database.php';
+require_once 'classes/Utilisateur.php';
+
+// Vérifier si l'utilisateur admin existe
+$pdo = Database::connect();
+$stmt = $pdo->prepare("SELECT * FROM utilisateurs WHERE nomutilisateur = 'admin'");
+$stmt->execute();
+$admin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+echo "<h2>Vérification du hachage</h2>";
+echo "<pre>";
+
+if ($admin) {
+    echo "Utilisateur admin trouvé :\n";
+    print_r($admin);
+    
+    $motdepasse = 'admin123'; // Le mot de passe que vous essayez d'utiliser
+    $hash = $admin['motdepasse'];
+    
+    echo "\nVérification du mot de passe...\n";
+    echo "Mot de passe fourni : $motdepasse\n";
+    echo "Hash stocké : $hash\n";
+    
+    if (password_verify($motdepasse, $hash)) {
+        echo "✅ Le mot de passe correspond au hash !\n";
+    } else {
+        echo "❌ Le mot de passe NE correspond PAS au hash.\n";
+        
+        // Proposer de mettre à jour le hash
+        echo "\nVoulez-vous mettre à jour le mot de passe de l'admin ?\n";
+        echo '<form method="post">';
+        echo '<input type="submit" name="update" value="Mettre à jour le mot de passe">';
+        echo '</form>';
+        
+        if (isset($_POST['update'])) {
+            $newHash = password_hash($motdepasse, PASSWORD_DEFAULT);
+            $update = $pdo->prepare("UPDATE utilisateurs SET motdepasse = ? WHERE nomutilisateur = 'admin'");
+            if ($update->execute([$newHash])) {
+                echo "\n✅ Le mot de passe a été mis à jour avec succès !\n";
+                echo "Nouveau hash : $newHash\n";
+            } else {
+                echo "\n❌ Erreur lors de la mise à jour du mot de passe.\n";
+            }
+        }
+    }
+} else {
+    echo "Aucun utilisateur admin trouvé.\n";
+    echo "Voulez-vous créer un nouvel utilisateur admin ?\n";
+    echo '<form method="post">';
+    echo '<input type="submit" name="create" value="Créer un admin">';
+    echo '</form>';
+    
+    if (isset($_POST['create'])) {
+        $motdepasse = 'admin123';
+        $hash = password_hash($motdepasse, PASSWORD_DEFAULT);
+        $create = $pdo->prepare("INSERT INTO utilisateurs (nom, prenom, email, sexe, nomutilisateur, motdepasse, role) 
+                               VALUES (?, ?, ?, ?, ?, ?, ?)");
+        if ($create->execute(['Admin', 'Système', 'admin@example.com', 'M', 'admin', $hash, 'admin'])) {
+            echo "\n✅ L'utilisateur admin a été créé avec succès !\n";
+            echo "Nom d'utilisateur : admin\n";
+            echo "Mot de passe : admin123\n";
+        } else {
+            echo "\n❌ Erreur lors de la création de l'utilisateur admin.\n";
+        }
+    }
+}
+
+echo "</pre>";
+echo "<p><a href='login.php'>Retour à la page de connexion</a></p>";

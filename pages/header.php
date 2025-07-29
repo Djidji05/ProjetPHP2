@@ -1,7 +1,7 @@
 <header id="header" class="header fixed-top d-flex align-items-center">
 
     <div class="d-flex align-items-center justify-content-between">
-      <a href="index.php" class="logo d-flex align-items-center">
+      <a href="dashboard.php" class="logo d-flex align-items-center">
         <img src="assets/img/logo.png" alt="">
         <span class="d-none d-lg-block">ANACAONA</span>
       </a>
@@ -30,6 +30,10 @@
             <i class="bi bi-bell"></i>
             <span class="badge bg-primary badge-number">4</span>
           </a><!-- End Notification Icon -->
+          <!-- Nan dashboard.php, mete sa kote ou vle bouton logout la parèt -->
+<a href="logout.php" style="padding:8px 12px; background:#f44336; color:#fff; text-decoration:none; border-radius:4px;">Logout</a>
+
+
 
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow notifications">
             <li class="dropdown-header">
@@ -184,7 +188,23 @@
             <li>
               <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
                 <i class="bi bi-person"></i>
-                <span>My Profile</span>
+                <span>Mon Profil</span>
+              </a>
+            </li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="ajouter_utilisateur.php">
+                <i class="bi bi-person-plus"></i>
+                <span>Ajouter un utilisateur</span>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="gestion_utilisateurs.php">
+                <i class="bi bi-people"></i>
+                <span>Gérer les utilisateurs</span>
               </a>
             </li>
             <li>
@@ -194,7 +214,7 @@
             <li>
               <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
                 <i class="bi bi-gear"></i>
-                <span>Account Settings</span>
+                <span>Paramètres du compte</span>
               </a>
             </li>
             <li>
@@ -204,7 +224,7 @@
             <li>
               <a class="dropdown-item d-flex align-items-center" href="pages-faq.html">
                 <i class="bi bi-question-circle"></i>
-                <span>Need Help?</span>
+                <span>Besoin d'aide?</span>
               </a>
             </li>
             <li>
@@ -212,9 +232,9 @@
             </li>
 
             <li>
-              <a class="dropdown-item d-flex align-items-center" href="#">
+              <a class="dropdown-item d-flex align-items-center" href="logout.php">
                 <i class="bi bi-box-arrow-right"></i>
-                <span>Sign Out</span>
+                <span>Déconnexion</span>
               </a>
             </li>
 
