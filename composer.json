@@ -1,0 +1,14 @@
+{
+    "name": "anacaona/gestion-locations",
+    "description": "Application de gestion locative",
+    "type": "project",
+    "require": {
+        "php": ">=7.4.0",
+        "tecnickcom/tcpdf": "^6.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "anacaona\\": "classes/"
+        }
+    }
+}

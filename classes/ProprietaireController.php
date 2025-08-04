@@ -3,6 +3,7 @@ namespace anacaona;
 
 use PDO;
 use PDOException;
+use Exception;
 require_once __DIR__ . '/Database.php';
 
 class ProprietaireController {
@@ -24,21 +25,91 @@ class ProprietaireController {
         }
     }
 
+    public function getAllProprietaires() {
+        return $this->listerProprietaires();
+    }
+
     public function ajouterProprietaire($donnees) {
         try {
-            $query = "INSERT INTO proprietaires (nom, prenom, email, telephone, adresse, date_creation) 
-                      VALUES (:nom, :prenom, :email, :telephone, :adresse, NOW())";
+            // Validation des données requises
+            if (empty($donnees['nom']) || empty($donnees['prenom'])) {
+                throw new Exception("Le nom et le prénom sont obligatoires");
+            }
+            
+            // Préparation de la requête avec tous les champs
+            $query = "INSERT INTO proprietaires (
+                        civilite, nom, prenom, email, telephone, 
+                        adresse, code_postal, ville, pays, date_naissance, 
+                        lieu_naissance, nationalite, piece_identite, numero_identite
+                      ) VALUES (
+                        :civilite, :nom, :prenom, :email, :telephone, 
+                        :adresse, :code_postal, :ville, :pays, :date_naissance, 
+                        :lieu_naissance, :nationalite, :piece_identite, :numero_identite
+                      )";
+                      
             $stmt = $this->db->prepare($query);
-            return $stmt->execute([
+            
+            // Exécution avec gestion des erreurs détaillée
+            if (!$stmt) {
+                $error = $this->db->errorInfo();
+                throw new Exception("Erreur de préparation de la requête: " . ($error[2] ?? 'Inconnue'));
+            }
+            
+            // Conversion de la date de naissance au format YYYY-MM-DD si fournie
+            $dateNaissance = !empty($donnees['date_naissance']) ? date('Y-m-d', strtotime($donnees['date_naissance'])) : null;
+            
+            $result = $stmt->execute([
+                ':civilite' => $donnees['civilite'] ?? 'M.',
                 ':nom' => $donnees['nom'],
                 ':prenom' => $donnees['prenom'],
-                ':email' => $donnees['email'],
-                ':telephone' => $donnees['telephone'],
-                ':adresse' => $donnees['adresse']
+                ':email' => $donnees['email'] ?? null,
+                ':telephone' => $donnees['telephone'] ?? null,
+                ':adresse' => $donnees['adresse'] ?? null,
+                ':code_postal' => $donnees['code_postal'] ?? null,
+                ':ville' => $donnees['ville'] ?? null,
+                ':pays' => $donnees['pays'] ?? 'France',
+                ':date_naissance' => $dateNaissance,
+                ':lieu_naissance' => $donnees['lieu_naissance'] ?? null,
+                ':nationalite' => $donnees['nationalite'] ?? null,
+                ':piece_identite' => $donnees['piece_identite'] ?? null,
+                ':numero_identite' => $donnees['numero_identite'] ?? null
             ]);
+            
+            if (!$result) {
+                $error = $stmt->errorInfo();
+                throw new Exception("Erreur d'exécution de la requête: " . ($error[2] ?? 'Inconnue'));
+            }
+            
+            // Retourner l'ID du nouveau propriétaire
+            return $this->db->lastInsertId();
+            
         } catch (PDOException $e) {
-            error_log("Erreur ajout propriétaire: " . $e->getMessage());
-            return false;
+            // Journalisation de l'erreur complète
+            error_log("Erreur PDO lors de l'ajout du propriétaire: " . $e->getMessage());
+            error_log("Code d'erreur: " . $e->getCode());
+            error_log("Requête: " . $query);
+            error_log("Données: " . print_r($donnees, true));
+            
+            // Message d'erreur plus détaillé
+            $message = "Erreur lors de l'ajout du propriétaire dans la base de données. ";
+            
+            // Gestion des erreurs courantes
+            switch ($e->getCode()) {
+                case '23000': // Violation de contrainte d'intégrité
+                    if (strpos($e->getMessage(), 'email') !== false) {
+                        $message .= "L'adresse email est déjà utilisée par un autre propriétaire.";
+                    } else {
+                        $message .= "Erreur de contrainte d'intégrité. Vérifiez les données saisies.";
+                    }
+                    break;
+                default:
+                    $message .= $e->getMessage();
+            }
+            
+            throw new Exception($message);
+        } catch (Exception $e) {
+            error_log("Erreur lors de l'ajout du propriétaire: " . $e->getMessage());
+            throw $e; // Relancer pour une gestion plus haut niveau
         }
     }
 

@@ -1,6 +1,7 @@
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <meta name="csrf-token" content="<?= isset($_SESSION['csrf_token']) ? htmlspecialchars($_SESSION['csrf_token']) : '' ?>">
 
   <title>ANACAONA APP</title>
   <meta content="" name="description">
@@ -26,8 +27,14 @@
   <!-- Template Main CSS File -->
   <link href="../assets/css/style.css" rel="stylesheet">
   
+  <!-- Font Awesome Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
   <!-- Dashboard Custom CSS -->
   <link href="../assets/css/dashboard.css" rel="stylesheet">
+  
+  <!-- Gestion CSS -->
+  <link href="../assets/css/gestion.css" rel="stylesheet">
 
   <!-- =======================================================
   * Template Name: NiceAdmin

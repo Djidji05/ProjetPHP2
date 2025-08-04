@@ -3,7 +3,7 @@
 
 // Paramèt koneksyon baz done
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'anacaona');
+define('DB_NAME', 'location_appartement');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 

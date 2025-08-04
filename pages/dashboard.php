@@ -1,3 +1,4 @@
+
 <?php
 // Vérification de la session - DOIT ÊTRE LA PREMIÈRE LIGNE DU FICHIER
 if (session_status() === PHP_SESSION_NONE) {
@@ -10,6 +11,7 @@ if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit();
 }
+
 
 // Chargement des classes nécessaires
 use anacaona\{Utilisateur, Charge, Database, Locataire, Appartement, Contrat};
@@ -30,7 +32,12 @@ if (method_exists('anacaona\\Utilisateur', 'nombreUtilisateur')) {
 // Récupération des statistiques
 $nombreLocataires = 0;
 $nombreAppartements = 0;
-$nombreContrats = 0;
+$nombreProprietaires = 0;
+$nombreUtilisateurs = 0;
+$nombreContratsActifs = 0;
+$nombreContratsTotal = 0;
+$tauxOccupation = 0;
+
 $derniersLocataires = [];
 $derniersAppartements = [];
 $derniersContrats = [];
@@ -46,11 +53,31 @@ try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM appartements");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $nombreAppartements = $result['total'] ?? 0;
+    
+    // Compter le nombre de propriétaires
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM proprietaires");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $nombreProprietaires = $result['total'] ?? 0;
+    
+    // Compter le nombre d'utilisateurs
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM utilisateurs");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $nombreUtilisateurs = $result['total'] ?? 0;
 
     // Compter le nombre de contrats actifs
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM contrats WHERE date_fin >= CURDATE()");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $nombreContrats = $result['total'] ?? 0;
+    $nombreContratsActifs = $result['total'] ?? 0;
+    
+    // Compter le nombre total de contrats
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM contrats");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $nombreContratsTotal = $result['total'] ?? 0;
+    
+    // Calculer le taux d'occupation
+    if ($nombreAppartements > 0) {
+        $tauxOccupation = round(($nombreContratsActifs / $nombreAppartements) * 100, 1);
+    }
 
     // Récupérer les 5 derniers locataires
     $stmt = $pdo->query("SELECT * FROM locataires ORDER BY date_creation DESC LIMIT 5");
@@ -113,15 +140,19 @@ try {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <!-- ======= Head ======= -->
 <?php include(__DIR__ . "/head.php"); ?>
  <!-- ======= End Head ======= -->
 <body>
 
   <!-- ======= Header ======= -->
-  <?php include(__DIR__ . "/header.php"); ?>
+  <?php include("header.php"); ?>
   <!-- End Header -->
+
+  <!-- ======= Sidebar ======= -->
+  <?php include("menu.php"); ?>
+  <!-- End Sidebar -->
 
   <!-- ======= Sidebar ======= -->
   <aside id="sidebar" class="sidebar">
@@ -148,78 +179,72 @@ try {
         <!-- Left side columns -->
         <div class="col-lg-8">
           <div class="row">
-         
-            <!-- Sales Card -->
-            <div class="col-xxl-4 col-md-6">
-              <div class="card info-card sales-card">
-
-                <div class="filter">
-                  <a class="icon" href="#" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></a>
-                  <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-                    <li class="dropdown-header text-start">
-                      <h6>Filter</h6>
-                    </li>
-
-                    <li><a class="dropdown-item" href="#">Today</a></li>
-                    <li><a class="dropdown-item" href="#">This Month</a></li>
-                    <li><a class="dropdown-item" href="#">This Year</a></li>
-                  </ul>
-                </div>
-
+            <!-- Carte Utilisateurs -->
+            <div class="col-xxl-3 col-md-6 mb-3">
+              <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Nombre D'utilisateur</h5>
-
-                  <div class="d-flex align-items-center">
-                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-person" ></i>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 class="card-title text-muted mb-1">Utilisateurs</h6>
+                      <h3 class="mb-0"><?php echo $nombreUtilisateurs; ?></h3>
                     </div>
-                    <div class="ps-3">
-                      <h6>
-                      <?php echo $nombre ?>
-                      </h6>
-                      <span class="text-success small pt-1 fw-bold">Utilisateurs</span> 
-
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                      <i class="bi bi-people fs-4 text-primary"></i>
                     </div>
                   </div>
+                  <div class="mt-3">
+                    <a href="gestion_utilisateurs.php" class="small text-primary text-decoration-none">
+                      Voir tous <i class="bi bi-arrow-right"></i>
+                    </a>
+                  </div>
                 </div>
-
               </div>
-            </div><!-- End Sales Card -->
+            </div>
+            <!-- Fin Carte Utilisateurs -->
+            
+            <!-- Carte Propriétaires -->
+            <div class="col-xxl-3 col-md-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 class="card-title text-muted mb-1">Propriétaires</h6>
+                      <h3 class="mb-0"><?php echo $nombreProprietaires; ?></h3>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                      <i class="bi bi-house-door fs-4 text-success"></i>
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <a href="gestion_proprietaires.php" class="small text-success text-decoration-none">
+                      Voir tous <i class="bi bi-arrow-right"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Fin Carte Propriétaires -->
 
      
-            <!-- End Revenue Card -->
-               <!-- Revenue Card -->
-            <div class="col-xxl-4 col-md-6">
-              <div class="card info-card revenue-card">
-
-                <div class="filter">
-                  <a class="icon" href="#" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></a>
-                  <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-                    <li class="dropdown-header text-start">
-                      <h6>Filter</h6>
-                    </li>
-
-                    <li><a class="dropdown-item" href="#">Today</a></li>
-                    <li><a class="dropdown-item" href="#">This Month</a></li>
-                    <li><a class="dropdown-item" href="#">This Year</a></li>
-                  </ul>
-                </div>
-
+            <!-- Carte Locataires -->
+            <div class="col-xxl-3 col-md-6 mb-3">
+              <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Revenue <span>| This Month</span></h5>
-
-                  <div class="d-flex align-items-center">
-                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-currency-dollar"></i>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 class="card-title text-muted mb-1">Locataires</h6>
+                      <h3 class="mb-0"><?php echo $nombreLocataires; ?></h3>
                     </div>
-                    <div class="ps-3">
-                      <h6>$3,264</h6>
-                      <span class="text-success small pt-1 fw-bold">8%</span> <span class="text-muted small pt-2 ps-1">increase</span>
-
+                    <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                      <i class="bi bi-people-fill fs-4 text-info"></i>
                     </div>
                   </div>
+                  <div class="mt-3">
+                    <a href="gestion_locataires.php" class="small text-info text-decoration-none">
+                      Voir tous <i class="bi bi-arrow-right"></i>
+                    </a>
+                  </div>
                 </div>
-
               </div>
             </div>
             <!-- End Revenue Card -->
@@ -498,17 +523,17 @@ try {
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 
   <!-- Vendor JS Files -->
-  <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
-  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="assets/vendor/chart.js/chart.umd.js"></script>
-  <script src="assets/vendor/echarts/echarts.min.js"></script>
-  <script src="assets/vendor/quill/quill.min.js"></script>
-  <script src="assets/vendor/simple-datatables/simple-datatables.js"></script>
-  <script src="assets/vendor/tinymce/tinymce.min.js"></script>
-  <script src="assets/vendor/php-email-form/validate.js"></script>
+  <script src="../assets/vendor/apexcharts/apexcharts.min.js"></script>
+  <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="../assets/vendor/chart.js/chart.umd.js"></script>
+  <script src="../assets/vendor/echarts/echarts.min.js"></script>
+  <script src="../assets/vendor/quill/quill.min.js"></script>
+  <script src="../assets/vendor/simple-datatables/simple-datatables.js"></script>
+  <script src="../assets/vendor/tinymce/tinymce.min.js"></script>
+  <script src="../assets/vendor/php-email-form/validate.js"></script>
 
   <!-- Template Main JS File -->
-  <script src="assets/js/main.js"></script>
+  <script src="../assets/js/main.js"></script>
 
   <!-- Script pour gérer le menu déroulant personnalisé -->
   <script>

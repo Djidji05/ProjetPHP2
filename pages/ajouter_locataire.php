@@ -62,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!-- Sidebar -->
 <?php include("sidebar.php"); ?>
+<script src="../assets/js/appartements.js"></script>
+
 
 <main id="main" class="main">
     <div class="pagetitle">
@@ -197,18 +199,143 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Charger la liste des appartements disponibles
 function chargerAppartements() {
+    console.log('Début du chargement des appartements...');
+    const select = document.getElementById('appartement_id');
+    
+    // Afficher un indicateur de chargement
+    const loadingOption = document.createElement('option');
+    loadingOption.value = '';
+    loadingOption.textContent = 'Chargement des appartements...';
+    loadingOption.disabled = true;
+    loadingOption.selected = true;
+    
+    // Vider les options existantes
+    while (select.options.length > 0) {
+        select.remove(0);
+    }
+    select.appendChild(loadingOption);
+    
+    // Désactiver le sélecteur pendant le chargement
+    select.disabled = true;
+    
     fetch('../api/get_appartements_disponibles.php')
-        .then(response => response.json())
+        .then(response => {
+            console.log('Réponse reçue du serveur, statut:', response.status);
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            const select = document.getElementById('appartement_id');
-            data.forEach(appart => {
+            console.log('Données reçues:', data);
+            
+            // Vider les options existantes
+            select.innerHTML = '';
+            
+            // Ajouter l'option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Sélectionner un appartement (optionnel)';
+            defaultOption.selected = true;
+            select.appendChild(defaultOption);
+            
+            if (!data || data.length === 0) {
+                console.warn('Aucun appartement disponible trouvé');
                 const option = document.createElement('option');
-                option.value = appart.id;
-                option.textContent = `${appart.numero} - ${appart.adresse || ''}`.trim();
+                option.value = '';
+                option.textContent = 'Aucun appartement disponible actuellement';
+                option.disabled = true;
                 select.appendChild(option);
+                return;
+            }
+            
+            // Vérifier si data est un tableau et si data.data existe
+            const appartements = Array.isArray(data.data) ? data.data : [];
+            
+            // Trier les appartements par ville et numéro
+            appartements.sort((a, b) => {
+                const villeA = a.ville || '';
+                const villeB = b.ville || '';
+                const villeCompare = villeA.localeCompare(villeB);
+                if (villeCompare !== 0) return villeCompare;
+                
+                const numA = a.numero ? a.numero.toString() : '';
+                const numB = b.numero ? b.numero.toString() : '';
+                return numA.localeCompare(numB, undefined, {numeric: true, sensitivity: 'base'});
+            });
+            
+            // Grouper par ville
+            const parVille = appartements.reduce((acc, appart) => {
+                const ville = appart.ville || 'Autre';
+                if (!acc[ville]) acc[ville] = [];
+                acc[ville].push(appart);
+                return acc;
+            }, {});
+            
+            // Créer des groupes d'options par ville
+            Object.entries(parVille).forEach(([ville, apparts]) => {
+                // Groupe d'options pour la ville
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = ville;
+                
+                // Ajouter chaque appartement de cette ville
+                apparts.forEach(appart => {
+                    const option = document.createElement('option');
+                    option.value = appart.id;
+                    
+                    // Formater le texte de l'option
+                    const numero = appart.numero ? `Appt ${appart.numero}` : 'Sans numéro';
+                    const adresse = appart.adresse ? ` - ${appart.adresse}` : '';
+                    const loyer = appart.loyer ? ` - ${parseFloat(appart.loyer).toFixed(2)}€` : '';
+                    const pieces = appart.nb_pieces ? ` - ${appart.nb_pieces} pièce${appart.nb_pieces > 1 ? 's' : ''}` : '';
+                    
+                    option.textContent = `${numero}${adresse}${pieces}${loyer}`.trim();
+                    option.dataset.loyer = appart.loyer || '0';
+                    
+                    optgroup.appendChild(option);
+                });
+                
+                select.appendChild(optgroup);
+            });
+            
+            console.log(`Ajout de ${data.length} appartements dans la liste déroulante`);
+            
+            // Activer le sélecteur
+            select.disabled = false;
+            
+            // Mettre à jour le loyer quand un appartement est sélectionné
+            select.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const loyer = selectedOption ? parseFloat(selectedOption.dataset.loyer || '0') : 0;
+                document.getElementById('loyer').value = loyer.toFixed(2);
             });
         })
-        .catch(error => console.error('Erreur lors du chargement des appartements:', error));
+        .catch(error => {
+            console.error('Erreur lors du chargement des appartements:', error);
+            
+            // Vider les options existantes
+            select.innerHTML = '';
+            
+            const errorOption = document.createElement('option');
+            errorOption.value = '';
+            errorOption.textContent = 'Erreur lors du chargement des appartements';
+            errorOption.disabled = true;
+            errorOption.selected = true;
+            select.appendChild(errorOption);
+            
+            // Afficher un message d'erreur plus visible
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-warning mt-3';
+            errorDiv.innerHTML = `
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                Impossible de charger la liste des appartements. 
+                <a href="javascript:location.reload()" class="alert-link">Réessayer</a>.
+                <div class="small text-muted">${error.message}</div>
+            `;
+            
+            // Insérer après le sélecteur
+            select.parentNode.insertBefore(errorDiv, select.nextSibling);
+        });
 }
 
 // Charger les appartements au chargement de la page

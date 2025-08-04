@@ -2,24 +2,47 @@
 
 namespace anacaona;
 
+use PDO;
+use PDOException;
+use Exception;
+
 class ContratController {
     private $db;
 
     public function __construct() {
-        $this->db = Database::getInstance()->getConnection();
+        $this->db = Database::connect();
     }
 
-    public function listerContrats() {
+    /**
+     * Liste les contrats avec possibilité de filtrage par statut
+     * @param array $filtres Tableau de filtres (ex: ['statut' => 'actif'])
+     * @return array Liste des contrats
+     */
+    public function listerContrats($filtres = []) {
         try {
             $query = "SELECT c.*, 
                              l.nom as locataire_nom, l.prenom as locataire_prenom,
-                             a.numero as appartement_numero, a.adresse as appartement_adresse
+                             a.numero as appartement_numero, a.adresse as appartement_adresse,
+                             CONCAT(l.prenom, ' ', l.nom) as locataire_complet,
+                             CONCAT(a.adresse, ' (', a.code_postal, ' ', a.ville, ')') as adresse_complete
                       FROM contrats c
                       JOIN locataires l ON c.locataire_id = l.id
                       JOIN appartements a ON c.appartement_id = a.id
-                      ORDER BY c.date_debut DESC";
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            // Filtre par statut
+            if (!empty($filtres['statut'])) {
+                $query .= " AND c.statut = :statut";
+                $params[':statut'] = $filtres['statut'];
+            }
+            
+            $query .= " ORDER BY c.date_debut DESC";
+            
             $stmt = $this->db->prepare($query);
-            $stmt->execute();
+            $stmt->execute($params);
+            
             return $stmt->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\PDOException $e) {
             error_log("Erreur lors de la récupération des contrats: " . $e->getMessage());
@@ -243,47 +266,89 @@ class ContratController {
         }
     }
 
+    /**
+     * Récupère les contrats qui arrivent bientôt à expiration
+     * 
+     * @param int $joursAvant Nombre de jours avant l'expiration à considérer
+     * @return array Tableau des contrats expirant bientôt
+     */
+    public function getContratsExpirantBientot($joursAvant = 30) {
+        try {
+            $query = "SELECT c.*, 
+                             l.nom as locataire_nom, l.prenom as locataire_prenom,
+                             l.email as locataire_email, l.telephone as locataire_telephone,
+                             a.adresse as appartement_adresse, a.ville as appartement_ville,
+                             a.code_postal as appartement_code_postal,
+                             DATEDIFF(c.date_fin, CURDATE()) as jours_restants
+                      FROM contrats c
+                      JOIN locataires l ON c.locataire_id = l.id
+                      JOIN appartements a ON c.appartement_id = a.id
+                      WHERE c.statut = 'en_cours'
+                      AND c.date_fin BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL :jours_avant DAY)
+                      ORDER BY c.date_fin ASC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':jours_avant', $joursAvant, \PDO::PARAM_INT);
+            $stmt->execute();
+            
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            
+        } catch (\PDOException $e) {
+            error_log("Erreur lors de la récupération des contrats expirant bientôt: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Récupère un contrat par son ID avec les informations associées
+     * 
+     * @param int $id L'ID du contrat à récupérer
+     * @return array|false Les données du contrat ou false si non trouvé
+     */
     public function getContrat($id) {
         try {
             $query = "SELECT c.*, 
                              l.nom as locataire_nom, l.prenom as locataire_prenom,
+                             l.email as locataire_email, l.telephone as locataire_telephone,
+                             a.adresse as appartement_adresse, a.ville as appartement_ville,
+                             a.code_postal as appartement_code_postal, a.loyer as appartement_loyer,
+                             a.charges as appartement_charges, a.superficie as appartement_superficie,
                              p.nom as proprietaire_nom, p.prenom as proprietaire_prenom,
-                             a.numero as appartement_numero, a.adresse as appartement_adresse
+                             p.email as proprietaire_email, p.telephone as proprietaire_telephone
                       FROM contrats c
                       JOIN locataires l ON c.locataire_id = l.id
-                      JOIN proprietaires p ON c.proprietaire_id = p.id
                       JOIN appartements a ON c.appartement_id = a.id
+                      LEFT JOIN proprietaires p ON a.proprietaire_id = p.id
                       WHERE c.id = :id";
             
             $stmt = $this->db->prepare($query);
-            $stmt->execute([':id' => $id]);
-            return $stmt->fetch(\PDO::FETCH_ASSOC);
-        } catch (\PDOException $e) {
-            error_log("Erreur lors de la récupération du contrat: " . $e->getMessage());
-            return null;
-        }
-    }
-
-    public function getContratsExpirantBientot($joursAvant = 30) {
-        try {
-            $dateLimite = date('Y-m-d', strtotime("+$joursAvant days"));
+            $stmt->bindParam(':id', $id, \PDO::PARAM_INT);
+            $stmt->execute();
             
-            $query = "SELECT c.*, 
-                             l.nom as locataire_nom, l.prenom as locataire_prenom,
-                             a.numero as appartement_numero
-                      FROM contrats c
-                      JOIN locataires l ON c.locataire_id = l.id
-                      JOIN appartements a ON c.appartement_id = a.id
-                      WHERE c.date_fin BETWEEN CURDATE() AND :date_limite
-                      AND c.statut = 'en_cours'
-                      ORDER BY c.date_fin ASC";
+            $contrat = $stmt->fetch(\PDO::FETCH_ASSOC);
             
-            $stmt = $this->db->prepare($query);
-            $stmt->execute([':date_limite' => $dateLimite]);
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            // Si le contrat est trouvé, formater les données supplémentaires
+            if ($contrat) {
+                // Calculer le statut actuel
+                $dateFin = new \DateTime($contrat['date_fin']);
+                $aujourdhui = new \DateTime();
+                $contrat['est_actif'] = $dateFin > $aujourdhui && $contrat['statut'] === 'en_cours';
+                
+                // Formater les montants
+                $contrat['loyer_formate'] = number_format($contrat['loyer'], 2, ',', ' ');
+                $contrat['charges_formatees'] = isset($contrat['charges']) ? number_format($contrat['charges'], 2, ',', ' ') : '0,00';
+                $contrat['depot_garantie_formate'] = isset($contrat['depot_garantie']) ? number_format($contrat['depot_garantie'], 2, ',', ' ') : '0,00';
+                
+                // Ajouter le nom complet du locataire et du propriétaire
+                $contrat['locataire_complet'] = trim($contrat['locataire_prenom'] . ' ' . $contrat['locataire_nom']);
+                $contrat['proprietaire_complet'] = trim(($contrat['proprietaire_prenom'] ?? '') . ' ' . ($contrat['proprietaire_nom'] ?? ''));
+            }
+            
+            return $contrat;
+            
         } catch (\PDOException $e) {
-            error_log("Erreur lors de la récupération des contrats expirant bientôt: " . $e->getMessage());
-            return [];
+            error_log("Erreur lors de la récupération du contrat #$id: " . $e->getMessage());
+            return false;
         }
     }
 
@@ -308,7 +373,7 @@ class ContratController {
                 FROM contrats c
                 JOIN locataires l ON c.locataire_id = l.id
                 WHERE c.appartement_id = :appartement_id
-                AND c.statut = 'actif'
+                AND c.statut = 'en_cours'
                 AND (
                     c.date_fin IS NULL 
                     OR c.date_fin >= CURDATE()
@@ -317,12 +382,12 @@ class ContratController {
             ";
             
             $stmt = $this->db->prepare($query);
-            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+            $stmt->bindParam(':appartement_id', $appartementId, \PDO::PARAM_INT);
             $stmt->execute();
             
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
             
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             error_log("Erreur lors de la récupération des contrats actifs pour l'appartement #$appartementId: " . $e->getMessage());
             return [];
         }
@@ -346,7 +411,7 @@ class ContratController {
                 FROM contrats c
                 JOIN locataires l ON c.locataire_id = l.id
                 WHERE c.appartement_id = :appartement_id
-                AND c.statut = 'actif'
+                AND c.statut = 'en_cours'
                 AND (
                     c.date_fin IS NULL 
                     OR c.date_fin >= CURDATE()

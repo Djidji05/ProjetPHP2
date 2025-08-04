@@ -103,12 +103,18 @@ if (isset($_GET['delete'])) {
                                         <td><?= htmlspecialchars($locataire['email']) ?></td>
                                         <td><?= htmlspecialchars($locataire['telephone']) ?></td>
                                         <td>
-                                            <a href="modifier_locataire.php?id=<?= $locataire['id'] ?>" class="btn btn-sm btn-warning">
+                                            <a href="fiche_locataire.php?id=<?= $locataire['id'] ?>" 
+                                               class="btn btn-sm btn-info text-white me-1" title="Voir">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="modifier_locataire.php?id=<?= $locataire['id'] ?>" 
+                                               class="btn btn-sm btn-primary me-1" title="Modifier">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
                                             <a href="gestion_locataires.php?delete=<?= $locataire['id'] ?>" 
                                                class="btn btn-sm btn-danger" 
-                                               onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce locataire ?')">
+                                               onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce locataire ?');"
+                                               title="Supprimer">
                                                 <i class="bi bi-trash"></i>
                                             </a>
                                         </td>

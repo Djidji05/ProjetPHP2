@@ -1,160 +1,302 @@
 <?php
-require_once 'includes/auth_check.php';
-requireRole('admin');
-require_once 'classes/AppartementController.php';
-require_once 'classes/ProprietaireController.php';
+// Vérification de la session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
+// Vérification des droits d'accès
+require_once '../includes/auth_check.php';
+require_once '../classes/AppartementController.php';
+require_once '../classes/ProprietaireController.php';
+require_once '../classes/Database.php';
+
+use anacaona\AppartementController;
+use anacaona\ProprietaireController;
+
+// Initialisation des contrôleurs
 $appartementController = new AppartementController();
 $proprietaireController = new ProprietaireController();
 
 // Récupérer la liste des propriétaires pour le select
 $proprietaires = $proprietaireController->listerProprietaires();
 
+// Définition des valeurs par défaut
+$formData = [
+    'numero' => '',
+    'adresse' => '',
+    'complement_adresse' => '',
+    'code_postal' => '',
+    'ville' => '',
+    'type' => 'appartement',
+    'surface' => '',
+    'pieces' => 1,
+    'chambres' => '',
+    'etage' => '',
+    'loyer' => '',
+    'charges' => 0,
+    'depot_garantie' => '',
+    'description' => '',
+    'equipements' => [],
+    'annee_construction' => '',
+    'proprietaire_id' => '',
+    'statut' => 'libre',
+    'ascenseur' => 0,
+    'balcon' => 0,
+    'terrasse' => 0,
+    'jardin' => 0,
+    'cave' => 0,
+    'parking' => 0
+];
+
+// Messages d'erreur
+$errors = [];
+$success = false;
+
 // Traitement du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // Validation des données
-        $errors = [];
-        
-        // Données de base
-        $donnees = [
+        // Récupération et nettoyage des données du formulaire
+        $formData = [
             'numero' => trim($_POST['numero'] ?? ''),
             'adresse' => trim($_POST['adresse'] ?? ''),
             'complement_adresse' => trim($_POST['complement_adresse'] ?? ''),
             'code_postal' => trim($_POST['code_postal'] ?? ''),
             'ville' => trim($_POST['ville'] ?? ''),
             'etage' => !empty($_POST['etage']) ? (int)$_POST['etage'] : null,
-            'surface' => (float)str_replace(',', '.', $_POST['surface'] ?? '0'),
-            'pieces' => (int)($_POST['pieces'] ?? 1),
+            'surface' => !empty($_POST['surface']) ? (float)str_replace(',', '.', $_POST['surface']) : 0,
+            'pieces' => !empty($_POST['pieces']) ? (int)$_POST['pieces'] : 1,
             'chambres' => !empty($_POST['chambres']) ? (int)$_POST['chambres'] : null,
             'type' => $_POST['type'] ?? 'appartement',
-            'loyer' => (float)str_replace(',', '.', $_POST['loyer'] ?? '0'),
+            'loyer' => !empty($_POST['loyer']) ? (float)str_replace(',', '.', $_POST['loyer']) : 0,
             'charges' => !empty($_POST['charges']) ? (float)str_replace(',', '.', $_POST['charges']) : 0,
             'depot_garantie' => !empty($_POST['depot_garantie']) ? (float)str_replace(',', '.', $_POST['depot_garantie']) : null,
             'description' => trim($_POST['description'] ?? ''),
             'equipements' => $_POST['equipements'] ?? [],
-            'dpe' => !empty($_POST['dpe']) ? strtoupper(trim($_POST['dpe'])) : null,
-            'ges' => !empty($_POST['ges']) ? strtoupper(trim($_POST['ges'])) : null,
             'annee_construction' => !empty($_POST['annee_construction']) ? (int)$_POST['annee_construction'] : null,
-            'proprietaire_id' => (int)$_POST['proprietaire_id'],
-            'statut' => $_POST['statut'] ?? 'libre'
+            'proprietaire_id' => !empty($_POST['proprietaire_id']) ? (int)$_POST['proprietaire_id'] : 0,
+            'statut' => $_POST['statut'] ?? 'libre',
+            'ascenseur' => isset($_POST['ascenseur']) ? 1 : 0,
+            'balcon' => isset($_POST['balcon']) ? 1 : 0,
+            'terrasse' => isset($_POST['terrasse']) ? 1 : 0,
+            'jardin' => isset($_POST['jardin']) ? 1 : 0,
+            'cave' => isset($_POST['cave']) ? 1 : 0,
+            'parking' => isset($_POST['parking']) ? 1 : 0
         ];
         
         // Validation des champs obligatoires
-        if (empty($donnees['numero'])) {
+        $errors = [];
+        
+        if (empty($formData['numero'])) {
             $errors[] = "Le numéro d'appartement est obligatoire.";
         }
         
-        if (empty($donnees['adresse'])) {
+        if (empty($formData['adresse'])) {
             $errors[] = "L'adresse est obligatoire.";
         }
         
-        if (empty($donnees['code_postal']) || !preg_match('/^[0-9]{5}$/', $donnees['code_postal'])) {
-            $errors[] = "Le code postal est invalide (5 chiffres requis).";
+        if (empty($formData['code_postal'])) {
+            $errors[] = "Le code postal est obligatoire.";
+        } elseif (!preg_match('/^[0-9]{5}$/', $formData['code_postal'])) {
+            $errors[] = "Le format du code postal est invalide (5 chiffres requis).";
         }
         
-        if (empty($donnees['ville'])) {
+        if (empty($formData['ville'])) {
             $errors[] = "La ville est obligatoire.";
         }
         
-        if ($donnees['surface'] <= 0) {
-            $errors[] = "La surface doit être supérieure à 0.";
+        if ($formData['surface'] <= 0) {
+            $errors[] = "La surface doit être supérieure à 0 m².";
         }
         
-        if ($donnees['pieces'] < 1) {
+        if ($formData['pieces'] < 1) {
             $errors[] = "Le nombre de pièces doit être d'au moins 1.";
         }
         
-        if ($donnees['loyer'] < 0) {
+        if ($formData['loyer'] < 0) {
             $errors[] = "Le loyer ne peut pas être négatif.";
         }
         
-        if ($donnees['proprietaire_id'] <= 0) {
+        if ($formData['proprietaire_id'] <= 0) {
             $errors[] = "Veuillez sélectionner un propriétaire.";
         }
         
         // Validation DPE et GES si renseignés
-        if (!empty($donnees['dpe']) && !preg_match('/^[A-G]$/i', $donnees['dpe'])) {
+        if (!empty($formData['dpe']) && !preg_match('/^[A-G]$/i', $formData['dpe'])) {
             $errors[] = "La lettre DPE doit être comprise entre A et G.";
         }
         
-        if (!empty($donnees['ges']) && !preg_match('/^[A-G]$/i', $donnees['ges'])) {
+        if (!empty($formData['ges']) && !preg_match('/^[A-G]$/i', $formData['ges'])) {
             $errors[] = "La lettre GES doit être comprise entre A et G.";
         }
         
-        // Traitement des photos téléchargées
-        $photos = [];
-        if (!empty($_FILES['photos']['name'][0])) {
-            $uploadDir = 'uploads/appartements/';
-            
-            // Créer le répertoire s'il n'existe pas
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
+        // Validation de l'année de construction si renseignée
+        if (!empty($formData['annee_construction'])) {
+            $currentYear = (int)date('Y');
+            if ($formData['annee_construction'] < 1800 || $formData['annee_construction'] > ($currentYear + 1)) {
+                $errors[] = "L'année de construction doit être comprise entre 1800 et " . ($currentYear + 1) . ".";
+            }
+        }
+        
+        // Si pas d'erreurs de validation, on procède à l'ajout
+        if (empty($errors)) {
+            // Traitement des photos téléchargées
+            $photos = [];
+            if (!empty($_FILES['photos']['name'][0])) {
+                $uploadDir = '../uploads/appartements/';
+                
+                // Créer le répertoire s'il n'existe pas
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                // Parcourir les fichiers téléchargés
+                $fileCount = count($_FILES['photos']['name']);
+                $maxFiles = 10; // Limite de 10 photos par appartement
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                $maxFileSize = 5 * 1024 * 1024; // 5 Mo
+                
+                for ($i = 0; $i < min($fileCount, $maxFiles); $i++) {
+                    $fileName = $_FILES['photos']['name'][$i];
+                    $fileTmpName = $_FILES['photos']['tmp_name'][$i];
+                    $fileType = $_FILES['photos']['type'][$i];
+                    $fileSize = $_FILES['photos']['size'][$i];
+                    $fileError = $_FILES['photos']['error'][$i];
+                    
+                    // Vérifier qu'il n'y a pas d'erreur
+                    if ($fileError === UPLOAD_ERR_OK) {
+                        // Vérifier le type de fichier
+                        if (in_array($fileType, $allowedTypes)) {
+                            // Vérifier la taille du fichier
+                            if ($fileSize <= $maxFileSize) {
+                                // Générer un nom de fichier unique
+                                $fileExt = pathinfo($fileName, PATHINFO_EXTENSION);
+                                $newFileName = uniqid('img_') . '_' . time() . '.' . strtolower($fileExt);
+                                $destination = $uploadDir . $newFileName;
+                                
+                                // Déplacer le fichier téléchargé
+                                if (move_uploaded_file($fileTmpName, $destination)) {
+                                    $photos[] = [
+                                        'chemin' => 'uploads/appartements/' . $newFileName,
+                                        'legende' => 'Photo ' . ($i + 1),
+                                        'est_principale' => ($i === 0) ? 1 : 0 // La première photo est principale par défaut
+                                    ];
+                                } else {
+                                    $errors[] = "Erreur lors du téléchargement de la photo : " . $fileName;
+                                }
+                            } else {
+                                $errors[] = "La photo " . $fileName . " dépasse la taille maximale autorisée (5 Mo).";
+                            }
+                        } else {
+                            $errors[] = "Le type de fichier " . $fileName . " n'est pas autorisé (formats acceptés : JPG, PNG, GIF).";
+                        }
+                    } elseif ($fileError !== UPLOAD_ERR_NO_FILE) {
+                        // Ne pas afficher d'erreur si aucun fichier n'a été téléchargé
+                        $errors[] = "Erreur lors du téléchargement de la photo " . $fileName . " : " . getUploadErrorMessage($fileError);
+                    }
+                }
             }
             
-            // Parcourir les fichiers téléchargés
-            $fileCount = count($_FILES['photos']['name']);
-            $maxFiles = 10; // Limite de 10 photos par appartement
-            
-            for ($i = 0; $i < min($fileCount, $maxFiles); $i++) {
-                $fileName = $_FILES['photos']['name'][$i];
-                $fileTmpName = $_FILES['photos']['tmp_name'][$i];
-                $fileSize = $_FILES['photos']['size'][$i];
-                $fileError = $_FILES['photos']['error'][$i];
-                $fileType = $_FILES['photos']['type'][$i];
-                
-                // Vérifier s'il n'y a pas d'erreur de téléchargement
-                if ($fileError === UPLOAD_ERR_OK) {
-                    // Vérifier le type de fichier (images uniquement)
-                    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                    if (in_array($fileType, $allowedTypes)) {
-                        // Vérifier la taille du fichier (max 5 Mo)
-                        $maxFileSize = 5 * 1024 * 1024; // 5 Mo
-                        if ($fileSize <= $maxFileSize) {
-                            // Générer un nom de fichier unique
-                            $fileExt = pathinfo($fileName, PATHINFO_EXTENSION);
-                            $newFileName = uniqid('appt_', true) . '.' . strtolower($fileExt);
-                            $fileDestination = $uploadDir . $newFileName;
-                            
-                            // Déplacer le fichier téléchargé
-                            if (move_uploaded_file($fileTmpName, $fileDestination)) {
-                                $photos[] = [
-                                    'chemin' => $fileDestination,
-                                    'legende' => '' // Légende vide par défaut
-                                ];
+            // Si pas d'erreurs avec les photos, on ajoute l'appartement
+            if (empty($errors)) {
+                try {
+                    // Préparer les données pour l'ajout
+                    $appartementData = [
+                        'numero' => $formData['numero'],
+                        'adresse' => $formData['adresse'],
+                        'complement_adresse' => $formData['complement_adresse'],
+                        'code_postal' => $formData['code_postal'],
+                        'ville' => $formData['ville'],
+                        'type' => $formData['type'],
+                        'surface' => $formData['surface'],
+                        'pieces' => $formData['pieces'],
+                        'chambres' => $formData['chambres'],
+                        'etage' => $formData['etage'],
+                        'loyer' => $formData['loyer'],
+                        'charges' => $formData['charges'],
+                        'depot_garantie' => $formData['depot_garantie'],
+                        'description' => $formData['description'],
+                        'equipements' => json_encode($formData['equipements']),
+                        'annee_construction' => $formData['annee_construction'],
+                        'proprietaire_id' => $formData['proprietaire_id'],
+                        'statut' => $formData['statut'],
+                        'ascenseur' => $formData['ascenseur'],
+                        'balcon' => $formData['balcon'],
+                        'terrasse' => $formData['terrasse'],
+                        'jardin' => $formData['jardin'],
+                        'cave' => $formData['cave'],
+                        'parking' => $formData['parking']
+                    ];
+                    
+                    // Ajouter l'appartement
+                    $appartementId = $appartementController->ajouterAppartement($appartementData, $photos);
+                    
+                    if ($appartementId) {
+                        // Rediriger vers la page de détail avec un message de succès
+                        $_SESSION['success_message'] = "L'appartement a été ajouté avec succès.";
+                        header('Location: detail_appartement.php?id=' . $appartementId);
+                        exit();
+                    } else {
+                        $errors[] = "Une erreur est survenue lors de l'ajout de l'appartement.";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Erreur lors de l'ajout de l'appartement : " . $e->getMessage();
+                    
+                    // En cas d'erreur, supprimer les photos téléchargées
+                    if (!empty($photos)) {
+                        foreach ($photos as $photo) {
+                            $photoPath = '../' . $photo['chemin'];
+                            if (file_exists($photoPath)) {
+                                @unlink($photoPath);
                             }
                         }
                     }
                 }
             }
         }
-        
-        // Si pas d'erreur, procéder à l'ajout
-        if (empty($errors)) {
-            $donnees['photos'] = $photos;
-            $appartementId = $appartementController->ajouterAppartement($donnees);
-            
-            $_SESSION['message'] = "L'appartement a été ajouté avec succès.";
-            $_SESSION['message_type'] = "success";
-            header('Location: gestion_appartements.php');
-            exit();
-        }
     } catch (Exception $e) {
-        $errors[] = "Une erreur est survenue lors de l'ajout de l'appartement : " . $e->getMessage();
+        $errors[] = "Une erreur est survenue : " . $e->getMessage();
+    }
+}
+
+/**
+ * Retourne un message d'erreur lisible pour les erreurs de téléchargement
+ * 
+ * @param int $errorCode Code d'erreur PHP
+ * @return string Message d'erreur lisible
+ */
+function getUploadErrorMessage($errorCode) {
+    switch ($errorCode) {
+        case UPLOAD_ERR_INI_SIZE:
+            return 'La taille du fichier dépasse la limite autorisée par le serveur.';
+        case UPLOAD_ERR_FORM_SIZE:
+            return 'La taille du fichier dépasse la limite spécifiée dans le formulaire HTML.';
+        case UPLOAD_ERR_PARTIAL:
+            return 'Le téléchargement du fichier n\'a été que partiellement effectué.';
+        case UPLOAD_ERR_NO_FILE:
+            return 'Aucun fichier n\'a été téléchargé.';
+        case UPLOAD_ERR_NO_TMP_DIR:
+            return 'Le dossier temporaire est manquant.';
+        case UPLOAD_ERR_CANT_WRITE:
+            return 'Échec de l\'écriture du fichier sur le disque.';
+        case UPLOAD_ERR_EXTENSION:
+            return 'Une extension PHP a arrêté le téléchargement du fichier.';
+        default:
+            return 'Erreur inconnue lors du téléchargement du fichier.';
     }
 }
 
 $titre_page = "Ajouter un appartement";
-include 'pages/head.php';
+include '../pages/head.php';
+?>
 ?>
 
 <body>
     <!-- ======= Header ======= -->
-    <?php include 'pages/header.php'; ?>
+    <?php include '../pages/header.php'; ?>
     <!-- End Header -->
 
     <!-- ======= Sidebar ======= -->
-    <?php include 'pages/sidebar.php'; ?>
+    <?php include '../pages/sidebar.php'; ?>
     <!-- End Sidebar-->
 
     <main id="main" class="main">
@@ -195,32 +337,32 @@ include 'pages/head.php';
                                 <div class="col-md-2">
                                     <label for="numero" class="form-label">Numéro*</label>
                                     <input type="text" class="form-control" id="numero" name="numero" required 
-                                           value="<?= htmlspecialchars($_POST['numero'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['numero']) ?>">
                                 </div>
                                 
                                 <div class="col-md-10">
                                     <label for="adresse" class="form-label">Adresse*</label>
                                     <input type="text" class="form-control" id="adresse" name="adresse" required
-                                           value="<?= htmlspecialchars($_POST['adresse'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['adresse']) ?>">
                                 </div>
                                 
                                 <div class="col-md-6">
                                     <label for="complement_adresse" class="form-label">Complément d'adresse</label>
                                     <input type="text" class="form-control" id="complement_adresse" name="complement_adresse"
-                                           value="<?= htmlspecialchars($_POST['complement_adresse'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['complement_adresse']) ?>">
                                 </div>
                                 
                                 <div class="col-md-3">
                                     <label for="code_postal" class="form-label">Code postal*</label>
                                     <input type="text" class="form-control" id="code_postal" name="code_postal" required
                                            pattern="[0-9]{5}" maxlength="5" 
-                                           value="<?= htmlspecialchars($_POST['code_postal'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['code_postal']) ?>">
                                 </div>
                                 
                                 <div class="col-md-3">
                                     <label for="ville" class="form-label">Ville*</label>
                                     <input type="text" class="form-control" id="ville" name="ville" required
-                                           value="<?= htmlspecialchars($_POST['ville'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['ville']) ?>">
                                 </div>
                                 
                                 <!-- Section Caractéristiques -->
@@ -231,11 +373,11 @@ include 'pages/head.php';
                                 <div class="col-md-3">
                                     <label for="type" class="form-label">Type de bien*</label>
                                     <select class="form-select" id="type" name="type" required>
-                                        <option value="appartement" <?= (isset($_POST['type']) && $_POST['type'] === 'appartement') ? 'selected' : '' ?>>Appartement</option>
-                                        <option value="maison" <?= (isset($_POST['type']) && $_POST['type'] === 'maison') ? 'selected' : '' ?>>Maison</option>
-                                        <option value="studio" <?= (isset($_POST['type']) && $_POST['type'] === 'studio') ? 'selected' : '' ?>>Studio</option>
-                                        <option value="loft" <?= (isset($_POST['type']) && $_POST['type'] === 'loft') ? 'selected' : '' ?>>Loft</option>
-                                        <option value="autre" <?= (isset($_POST['type']) && $_POST['type'] === 'autre') ? 'selected' : '' ?>>Autre</option>
+                                        <option value="appartement" <?= ($formData['type'] === 'appartement') ? 'selected' : '' ?>>Appartement</option>
+                                        <option value="maison" <?= ($formData['type'] === 'maison') ? 'selected' : '' ?>>Maison</option>
+                                        <option value="studio" <?= ($formData['type'] === 'studio') ? 'selected' : '' ?>>Studio</option>
+                                        <option value="loft" <?= ($formData['type'] === 'loft') ? 'selected' : '' ?>>Loft</option>
+                                        <option value="autre" <?= ($formData['type'] === 'autre') ? 'selected' : '' ?>>Autre</option>
                                     </select>
                                 </div>
                                 
@@ -243,35 +385,35 @@ include 'pages/head.php';
                                     <label for="surface" class="form-label">Surface (m²)*</label>
                                     <input type="number" class="form-control" id="surface" name="surface" 
                                            step="0.01" min="0" required
-                                           value="<?= htmlspecialchars($_POST['surface'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['surface']) ?>">
                                 </div>
                                 
                                 <div class="col-md-2">
                                     <label for="pieces" class="form-label">Pièces*</label>
                                     <input type="number" class="form-control" id="pieces" name="pieces" 
                                            min="1" required
-                                           value="<?= htmlspecialchars($_POST['pieces'] ?? '1') ?>">
+                                           value="<?= htmlspecialchars($formData['pieces']) ?>">
                                 </div>
                                 
                                 <div class="col-md-2">
                                     <label for="chambres" class="form-label">Chambres</label>
                                     <input type="number" class="form-control" id="chambres" name="chambres" 
                                            min="0" 
-                                           value="<?= htmlspecialchars($_POST['chambres'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['chambres']) ?>">
                                     <div class="form-text">Laisser vide pour calculer automatiquement (pièces - 1)</div>
                                 </div>
                                 
                                 <div class="col-md-2">
                                     <label for="etage" class="form-label">Étage</label>
                                     <input type="number" class="form-control" id="etage" name="etage" 
-                                           value="<?= htmlspecialchars($_POST['etage'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['etage'] ?? '') ?>">
                                 </div>
                                 
                                 <div class="col-md-3">
                                     <label for="annee_construction" class="form-label">Année de construction</label>
                                     <input type="number" class="form-control" id="annee_construction" name="annee_construction" 
                                            min="1800" max="<?= date('Y') + 1 ?>"
-                                           value="<?= htmlspecialchars($_POST['annee_construction'] ?? '') ?>">
+                                           value="<?= htmlspecialchars($formData['annee_construction'] ?? '') ?>">
                                 </div>
                                 
                                 <!-- Section Financière -->
@@ -285,7 +427,7 @@ include 'pages/head.php';
                                         <option value="">Sélectionner un propriétaire</option>
                                         <?php foreach ($proprietaires as $proprietaire): ?>
                                             <option value="<?= $proprietaire['id'] ?>" 
-                                                <?= (isset($_POST['proprietaire_id']) && $_POST['proprietaire_id'] == $proprietaire['id']) ? 'selected' : '' ?>>
+                                                <?= ($formData['proprietaire_id'] == $proprietaire['id']) ? 'selected' : '' ?>>
                                                 <?= htmlspecialchars($proprietaire['prenom'] . ' ' . $proprietaire['nom']) ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -297,7 +439,7 @@ include 'pages/head.php';
                                     <div class="input-group">
                                         <input type="number" class="form-control" id="loyer" name="loyer" 
                                                step="0.01" min="0" required
-                                               value="<?= htmlspecialchars($_POST['loyer'] ?? '') ?>">
+                                               value="<?= htmlspecialchars($formData['loyer']) ?>">
                                         <span class="input-group-text">€</span>
                                     </div>
                                 </div>
@@ -307,7 +449,7 @@ include 'pages/head.php';
                                     <div class="input-group">
                                         <input type="number" class="form-control" id="charges" name="charges" 
                                                step="0.01" min="0"
-                                               value="<?= htmlspecialchars($_POST['charges'] ?? '0') ?>">
+                                               value="<?= htmlspecialchars($formData['charges']) ?>">
                                         <span class="input-group-text">€/mois</span>
                                     </div>
                                 </div>
@@ -317,7 +459,7 @@ include 'pages/head.php';
                                     <div class="input-group">
                                         <input type="number" class="form-control" id="depot_garantie" name="depot_garantie" 
                                                step="0.01" min="0"
-                                               value="<?= htmlspecialchars($_POST['depot_garantie'] ?? '') ?>">
+                                               value="<?= htmlspecialchars($formData['depot_garantie'] ?? '') ?>">
                                         <span class="input-group-text">€</span>
                                     </div>
                                     <div class="form-text">Laisser vide pour utiliser 1 mois de loyer</div>
@@ -326,95 +468,60 @@ include 'pages/head.php';
                                 <div class="col-md-3">
                                     <label for="statut" class="form-label">Statut*</label>
                                     <select class="form-select" id="statut" name="statut" required>
-                                        <option value="libre" <?= (isset($_POST['statut']) && $_POST['statut'] === 'libre') ? 'selected' : '' ?>>Disponible</option>
-                                        <option value="loue" <?= (isset($_POST['statut']) && $_POST['statut'] === 'loue') ? 'selected' : '' ?>>Loué</option>
-                                        <option value="en_entretien" <?= (isset($_POST['statut']) && $_POST['statut'] === 'en_entretien') ? 'selected' : '' ?>>En entretien</option>
+                                        <option value="libre" <?= ($formData['statut'] === 'libre') ? 'selected' : '' ?>>Disponible</option>
+                                        <option value="loue" <?= ($formData['statut'] === 'loue') ? 'selected' : '' ?>>Loué</option>
+                                        <option value="en_entretien" <?= ($formData['statut'] === 'en_entretien') ? 'selected' : '' ?>>En entretien</option>
                                     </select>
                                 </div>
                                 
-                                <!-- Section DPE et GES -->
+                                <!-- Section Équipements et Commodités -->
                                 <div class="col-12 mt-4">
-                                    <h5 class="mb-3">Diagnostics</h5>
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label for="dpe" class="form-label">DPE</label>
-                                    <select class="form-select" id="dpe" name="dpe">
-                                        <option value="">Non renseigné</option>
-                                        <option value="A" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'A') ? 'selected' : '' ?>>A</option>
-                                        <option value="B" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'B') ? 'selected' : '' ?>>B</option>
-                                        <option value="C" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'C') ? 'selected' : '' ?>>C</option>
-                                        <option value="D" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'D') ? 'selected' : '' ?>>D</option>
-                                        <option value="E" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'E') ? 'selected' : '' ?>>E</option>
-                                        <option value="F" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'F') ? 'selected' : '' ?>>F</option>
-                                        <option value="G" <?= (isset($_POST['dpe']) && strtoupper($_POST['dpe']) === 'G') ? 'selected' : '' ?>>G</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label for="ges" class="form-label">GES</label>
-                                    <select class="form-select" id="ges" name="ges">
-                                        <option value="">Non renseigné</option>
-                                        <option value="A" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'A') ? 'selected' : '' ?>>A</option>
-                                        <option value="B" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'B') ? 'selected' : '' ?>>B</option>
-                                        <option value="C" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'C') ? 'selected' : '' ?>>C</option>
-                                        <option value="D" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'D') ? 'selected' : '' ?>>D</option>
-                                        <option value="E" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'E') ? 'selected' : '' ?>>E</option>
-                                        <option value="F" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'F') ? 'selected' : '' ?>>F</option>
-                                        <option value="G" <?= (isset($_POST['ges']) && strtoupper($_POST['ges']) === 'G') ? 'selected' : '' ?>>G</option>
-                                    </select>
-                                </div>
-                                
-                                <!-- Section Équipements -->
-                                <div class="col-12 mt-4">
-                                    <h5 class="mb-3">Équipements</h5>
-                                </div>
-                                
-                                <?php
-                                $equipements = [
-                                    'ascenseur' => 'Ascenseur',
-                                    'cave' => 'Cave',
-                                    'parking' => 'Place de parking',
-                                    'balcon' => 'Balcon',
-                                    'terrasse' => 'Terrasse',
-                                    'jardin' => 'Jardin',
-                                    'cheminee' => 'Cheminée',
-                                    'climatisation' => 'Climatisation',
-                                    'interphone' => 'Interphone',
-                                    'digicode' => 'Digicode',
-                                    'gardien' => 'Gardien',
-                                    'alarme' => 'Alarme',
-                                    'videosurveillance' => 'Vidéo-surveillance',
-                                    'portail' => 'Portail électrique',
-                                    'piscine' => 'Piscine',
-                                    'jacuzzi' => 'Jacuzzi',
-                                    'sauna' => 'Sauna',
-                                    'salle_sport' => 'Salle de sport',
-                                    'buanderie' => 'Buanderie',
-                                    'meuble' => 'Meublé',
-                                    'cheminee' => 'Cheminée',
-                                ];
-                                
-                                $equipementsParColonne = array_chunk($equipements, ceil(count($equipements) / 3), true);
-                                ?>
-                                
-                                <?php foreach ($equipementsParColonne as $colonne): ?>
-                                    <div class="col-md-4">
-                                        <?php foreach ($colonne as $key => $label): ?>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" 
-                                                       id="equipement_<?= $key ?>" 
-                                                       name="equipements[<?= $key ?>]" 
-                                                       value="1"
-                                                       <?= (isset($_POST['equipements'][$key]) && $_POST['equipements'][$key] == 1) ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="equipement_<?= $key ?>">
-                                                    <?= $label ?>
-                                                </label>
+                                    <h5 class="mb-3">Équipements et Commodités</h5>
+                                    <div class="row">
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="ascenseur" name="ascenseur" value="1" <?= ($formData['ascenseur'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="ascenseur">Ascenseur</label>
                                             </div>
-                                        <?php endforeach; ?>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="balcon" name="balcon" value="1" <?= ($formData['balcon'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="balcon">Balcon</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="terrasse" name="terrasse" value="1" <?= ($formData['terrasse'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="terrasse">Terrasse</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="jardin" name="jardin" value="1" <?= ($formData['jardin'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="jardin">Jardin</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="cave" name="cave" value="1" <?= ($formData['cave'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="cave">Cave</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="parking" name="parking" value="1" <?= ($formData['parking'] == 1) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="parking">Parking</label>
+                                            </div>
+                                        </div>
                                     </div>
-                                <?php endforeach; ?>
-                                
+                                    
+                                    <div class="mb-3">
+                                        <label for="equipements" class="form-label">Équipements supplémentaires (séparés par des virgules)</label>
+                                        <textarea class="form-control" id="equipements" name="equipements" rows="2" placeholder="Ex: Climatisation, Lave-vaisselle, Congélateur, etc."><?= htmlspecialchars(is_array($formData['equipements']) ? implode(', ', $formData['equipements']) : $formData['equipements']) ?></textarea>
+                                    </div>
+                                </div>
+
                                 <!-- Section Photos -->
                                 <div class="col-12 mt-4">
                                     <h5 class="mb-3">Photos</h5>
@@ -435,9 +542,11 @@ include 'pages/head.php';
                                     <h5 class="mb-3">Description</h5>
                                     <div class="mb-3">
                                         <label for="description" class="form-label">Description détaillée</label>
-                                        <textarea class="form-control" id="description" name="description" rows="5"><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
+                                        <textarea class="form-control" id="description" name="description" rows="5"><?= htmlspecialchars($formData['description']) ?></textarea>
                                     </div>
                                 </div>
+                                
+
                                 
                                 <!-- Boutons de soumission -->
                                 <div class="text-center mt-4">
@@ -457,7 +566,7 @@ include 'pages/head.php';
     </main>
 
     <!-- ======= Footer ======= -->
-    <?php include 'pages/footer.php'; ?>
+    <?php include '../pages/footer.php'; ?>
     <!-- End Footer -->
 
     <a href="#" class="back-to-top d-flex align-items-center justify-content-center">
@@ -465,17 +574,17 @@ include 'pages/head.php';
     </a>
 
     <!-- Vendor JS Files -->
-    <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
-    <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/vendor/chart.js/chart.umd.js"></script>
-    <script src="assets/vendor/echarts/echarts.min.js"></script>
-    <script src="assets/vendor/quill/quill.min.js"></script>
-    <script src="assets/vendor/simple-datatables/simple-datatables.js"></script>
-    <script src="assets/vendor/tinymce/tinymce.min.js"></script>
-    <script src="assets/vendor/php-email-form/validate.js"></script>
+    <script src="../assets/vendor/apexcharts/apexcharts.min.js"></script>
+    <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/chart.js/chart.umd.js"></script>
+    <script src="../assets/vendor/echarts/echarts.min.js"></script>
+    <script src="../assets/vendor/quill/quill.min.js"></script>
+    <script src="../assets/vendor/simple-datatables/simple-datatables.js"></script>
+    <script src="../assets/vendor/tinymce/tinymce.min.js"></script>
+    <script src="../assets/vendor/php-email-form/validate.js"></script>
 
     <!-- Template Main JS File -->
-    <script src="assets/js/main.js"></script>
+    <script src="../assets/js/main.js"></script>
 
     <script>
     // Afficher un aperçu des images avant téléchargement
@@ -555,36 +664,54 @@ include 'pages/head.php';
     // Validation du formulaire avant soumission
     document.getElementById('appartementForm').addEventListener('submit', function(e) {
         // Vérifier si un propriétaire est sélectionné
-        const proprietaireId = document.getElementById('proprietaire_id');
-        if (proprietaireId.value === '') {
+        const proprietaireSelect = document.getElementById('proprietaire_id');
+        if (proprietaireSelect.value === '') {
             e.preventDefault();
             alert('Veuillez sélectionner un propriétaire.');
-            proprietaireId.focus();
+            proprietaireSelect.focus();
             return false;
         }
         
-        // Vérifier si le code postal est valide
-        const codePostal = document.getElementById('code_postal');
-        if (!/^\d{5}$/.test(codePostal.value)) {
+        // Vérifier si le loyer est valide
+        const loyerInput = document.getElementById('loyer');
+        if (parseFloat(loyerInput.value) <= 0) {
+            e.preventDefault();
+            alert('Le loyer doit être supérieur à 0 €.');
+            loyerInput.focus();
+            return false;
+        }
+        
+        // Vérifier le format du code postal
+        const codePostalInput = document.getElementById('code_postal');
+        const codePostalRegex = /^[0-9]{5}$/;
+        if (!codePostalRegex.test(codePostalInput.value)) {
             e.preventDefault();
             alert('Le code postal doit contenir exactement 5 chiffres.');
-            codePostal.focus();
+            codePostalInput.focus();
             return false;
         }
         
-        // Vérifier la surface
-        const surface = parseFloat(document.getElementById('surface').value);
-        if (isNaN(surface) || surface <= 0) {
-            e.preventDefault();
-            alert('Veuillez saisir une surface valide.');
-            return false;
-        }
-        
-        // Afficher un indicateur de chargement
-        const submitBtn = this.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Enregistrement en cours...';
+        // Si tout est valide, le formulaire sera soumis
+        return true;
     });
+    
+    // Initialiser TinyMCE pour la zone de description
+    if (typeof tinymce !== 'undefined') {
+        tinymce.init({
+            selector: '#description',
+            plugins: 'advlist autolink lists link image charmap print preview anchor',
+            toolbar_mode: 'floating',
+            height: 300,
+            menubar: false,
+            statusbar: false,
+            content_style: 'body { font-family: Arial, sans-serif; font-size: 14px; }',
+            setup: function(editor) {
+                editor.on('change', function() {
+                    editor.save();
+                });
+            }
+        });
+    }
     </script>
 </body>
 </html>

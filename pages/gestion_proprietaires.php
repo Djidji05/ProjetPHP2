@@ -116,8 +116,12 @@ if (isset($_GET['delete'])) {
                                                 <td><?= htmlspecialchars($proprietaire['email']) ?></td>
                                                 <td><?= htmlspecialchars($proprietaire['telephone']) ?></td>
                                                 <td>
+                                                    <a href="fiche_proprietaire.php?id=<?= $proprietaire['id'] ?>" 
+                                                       class="btn btn-sm btn-info text-white me-1" title="Voir">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
                                                     <a href="modifier_proprietaire.php?id=<?= $proprietaire['id'] ?>" 
-                                                       class="btn btn-sm btn-primary" title="Modifier">
+                                                       class="btn btn-sm btn-primary me-1" title="Modifier">
                                                         <i class="bi bi-pencil"></i>
                                                     </a>
                                                     <a href="gestion_proprietaires.php?delete=<?= $proprietaire['id'] ?>" 

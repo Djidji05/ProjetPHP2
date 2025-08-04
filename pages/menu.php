@@ -39,4 +39,3 @@
         <i class="bi bi-building"></i><span>APPARTEMENTS</span>
     </a>
 </li>
-</aside>
