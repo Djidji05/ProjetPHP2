@@ -22,10 +22,64 @@ class AppartementController {
         return $this->db;
     }
 
+    /**
+     * Récupère la liste de tous les appartements avec les informations du propriétaire
+     * 
+     * @return array La liste des appartements avec les informations du propriétaire
+     */
+    public function listerAppartements() {
+        try {
+            $query = "SELECT a.*, 
+                             p.nom as proprietaire_nom, 
+                             p.prenom as proprietaire_prenom,
+                             CONCAT(a.adresse, ', ', a.code_postal, ' ', a.ville) as adresse_complete
+                      FROM appartements a
+                      LEFT JOIN proprietaires p ON a.id_proprietaire = p.id
+                      ORDER BY a.ville, a.adresse";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute();
+            
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération de la liste des appartements: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Récupère tous les appartements (méthode de compatibilité)
+     * 
+     * @deprecated Utiliser listerAppartements() à la place
+     * @return array La liste des appartements
+     */
     public function getAllAppartements() {
-        $stmt = $this->db->prepare("SELECT * FROM appartements");
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->listerAppartements();
+    }
+
+    /**
+     * Récupère les photos d'un appartement
+     * 
+     * @param int $appartementId L'ID de l'appartement
+     * @return array Les photos de l'appartement
+     */
+    public function getPhotos($appartementId) {
+        try {
+            $query = "SELECT * FROM photos_appartement WHERE appartement_id = :appartement_id ORDER BY est_principale DESC, id ASC";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $photos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Journalisation pour le débogage
+            error_log("Photos récupérées pour l'appartement $appartementId : " . print_r($photos, true));
+            
+            return $photos;
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération des photos de l'appartement $appartementId : " . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -36,12 +90,30 @@ class AppartementController {
      */
     public function getAppartementById($id) {
         try {
-            // Requête simplifiée sans la sous-requête de comptage des contrats
-            $query = "SELECT a.*, 
-                             p.nom as proprietaire_nom, p.prenom as proprietaire_prenom,
-                             p.email as proprietaire_email, p.telephone as proprietaire_telephone
+            // Requête basée sur la structure actuelle de la table appartements
+            $query = "SELECT 
+                        a.*,
+                        p.nom as proprietaire_nom, 
+                        p.prenom as proprietaire_prenom,
+                        p.email as proprietaire_email, 
+                        p.telephone as proprietaire_telephone,
+                        a.id_proprietaire as proprietaire_id,
+                        a.pieces as nombre_pieces,
+                        1 as chambres,  -- Valeur par défaut
+                        0 as depot_garantie,  -- Valeur par défaut
+                        'Non spécifiée' as ville,  -- Valeur par défaut
+                        '' as code_postal,  -- Valeur par défaut
+                        'Rez-de-chaussée' as etage,  -- Valeur par défaut
+                        0 as ascenseur,  -- Valeur par défaut
+                        0 as balcon,  -- Valeur par défaut
+                        0 as terrasse,  -- Valeur par défaut
+                        0 as jardin,  -- Valeur par défaut
+                        0 as cave,  -- Valeur par défaut
+                        0 as parking,  -- Valeur par défaut
+                        'Aucune description disponible' as description,  -- Valeur par défaut
+                        'Non spécifiée' as date_construction  -- Valeur par défaut
                       FROM appartements a
-                      LEFT JOIN proprietaires p ON a.proprietaire_id = p.id
+                      LEFT JOIN proprietaires p ON a.id_proprietaire = p.id
                       WHERE a.id = :id";
             
             $stmt = $this->db->prepare($query);
@@ -56,6 +128,19 @@ class AppartementController {
             // Journalisation pour le débogage
             error_log("Requête SQL exécutée: " . $query . " avec ID: " . $id);
             error_log("Résultat de la requête: " . print_r($result, true));
+            
+            // Vérifier si un résultat a été trouvé
+            if ($result === false) {
+                error_log("Aucun appartement trouvé avec l'ID: " . $id);
+                
+                // Vérifier si la table existe
+                $tables = $this->db->query("SHOW TABLES LIKE 'appartements'")->fetchAll();
+                error_log("Table 'appartements' existe: " . (count($tables) > 0 ? 'Oui' : 'Non'));
+                
+                // Vérifier si l'ID existe
+                $count = $this->db->query("SELECT COUNT(*) as count FROM appartements WHERE id = " . (int)$id)->fetch();
+                error_log("Nombre d'appartements avec cet ID: " . $count['count']);
+            }
             
             return $result;
         } catch (PDOException $e) {
@@ -113,8 +198,8 @@ class AppartementController {
     public function checkAppartementHasActiveContracts($appartementId) {
         try {
             $query = "SELECT COUNT(*) as count FROM contrats 
-                     WHERE appartement_id = :appartement_id 
-                     AND date_fin >= CURDATE()";
+                     WHERE id_appartement = :appartement_id 
+                     AND (date_fin IS NULL OR date_fin >= CURDATE())";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
@@ -168,45 +253,38 @@ class AppartementController {
     }
     
     /**
-     * Ajoute un nouvel appartement (version compatible avec l'ancien code)
+     * Ajoute un nouvel appartement
      * 
-     * @param string $adresse L'adresse de l'appartement
-     * @param float $surface La surface en m²
-     * @param float $loyer Le loyer en HTG
-     * @param float $charges Les charges en HTG
-     * @param int $nombre_pieces Le nombre de pièces
-     * @param int $proprietaire_id L'ID du propriétaire
-     * @return bool True en cas de succès, false sinon
+     * @param array $data Les données de l'appartement sous forme de tableau associatif
+     * @param array $photos Tableau des photos à associer (optionnel)
+     * @return int|false L'ID du nouvel appartement ou false en cas d'échec
      * @throws Exception En cas d'erreur
      */
-    public function ajouterAppartement($adresse, $surface, $loyer, $charges, $nombre_pieces, $proprietaire_id) {
+    public function ajouterAppartement($data, $photos = []) {
         try {
             $this->db->beginTransaction();
             
-            // Préparation de la requête d'insertion
-            $query = "INSERT INTO appartements (
-                adresse, surface, loyer, charges, nombre_pieces, 
-                proprietaire_id, statut, created_at, updated_at
-            ) VALUES (
-                :adresse, :surface, :loyer, :charges, :nombre_pieces, 
-                :proprietaire_id, 'libre', NOW(), NOW()
-            )";
-            
-            $stmt = $this->db->prepare($query);
-            
-            // Nettoyage et validation des entrées
-            $adresse = trim($adresse);
-            $surface = (float)$surface;
-            $loyer = (float)$loyer;
-            $charges = (float)$charges;
-            $nombre_pieces = (int)$nombre_pieces;
-            $proprietaire_id = (int)$proprietaire_id;
-            
-            // Validation des données
-            if (empty($adresse)) {
-                throw new Exception("L'adresse est obligatoire");
+            // Validation des champs obligatoires
+            $requiredFields = ['adresse', 'surface', 'loyer', 'charges', 'pieces', 'proprietaire_id'];
+            foreach ($requiredFields as $field) {
+                if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
+                    throw new Exception("Le champ " . str_replace('_', ' ', $field) . " est obligatoire");
+                }
             }
             
+            // Nettoyage et validation des entrées
+            $data = array_map(function($value) {
+                return is_string($value) ? trim($value) : $value;
+            }, $data);
+            
+            $surface = (float)$data['surface'];
+            $loyer = (float)$data['loyer'];
+            $charges = (float)$data['charges'];
+            $pieces = (int)$data['pieces'];
+            $proprietaire_id = (int)$data['proprietaire_id'];
+            $statut = $data['statut'] ?? 'libre';
+            
+            // Validation des données numériques
             if ($surface <= 0) {
                 throw new Exception("La surface doit être supérieure à zéro");
             }
@@ -219,42 +297,97 @@ class AppartementController {
                 throw new Exception("Les charges ne peuvent pas être négatives");
             }
             
-            if ($nombre_pieces <= 0) {
-                throw new Exception("Le nombre de pièces doit être supérieur à zéro");
-            }
+            // Préparation de la requête d'insertion
+            $query = "INSERT INTO appartements (
+                numero, adresse, complement_adresse, code_postal, ville, 
+                type, surface, pieces, chambres, etage, 
+                loyer, charges, depot_garantie, description, 
+                equipements, annee_construction, proprietaire_id, 
+                statut, ascenseur, balcon, terrasse, jardin, cave, parking, 
+                date_creation, date_mise_a_jour
+            ) VALUES (
+                :numero, :adresse, :complement_adresse, :code_postal, :ville, 
+                :type, :surface, :pieces, :chambres, :etage, 
+                :loyer, :charges, :depot_garantie, :description, 
+                :equipements, :annee_construction, :proprietaire_id, 
+                :statut, :ascenseur, :balcon, :terrasse, :jardin, :cave, :parking, 
+                NOW(), NOW()
+            )";
             
-            if ($proprietaire_id <= 0) {
-                throw new Exception("Un propriétaire valide doit être sélectionné");
-            }
+            // Préparation et exécution de la requête
+            $stmt = $this->db->prepare($query);
             
-            // Liaison des paramètres
-            $stmt->bindParam(':adresse', $adresse);
-            $stmt->bindParam(':surface', $surface, PDO::PARAM_STR);
-            $stmt->bindParam(':loyer', $loyer, PDO::PARAM_STR);
-            $stmt->bindParam(':charges', $charges, PDO::PARAM_STR);
-            $stmt->bindParam(':nombre_pieces', $nombre_pieces, PDO::PARAM_INT);
-            $stmt->bindParam(':proprietaire_id', $proprietaire_id, PDO::PARAM_INT);
+            // Préparation des valeurs pour l'insertion
+            $equipements = isset($data['equipements']) && is_array($data['equipements']) 
+                ? json_encode($data['equipements']) 
+                : '[]';
+                
+            $stmt->bindValue(':numero', $data['numero'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':adresse', $data['adresse'], PDO::PARAM_STR);
+            $stmt->bindValue(':complement_adresse', $data['complement_adresse'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':code_postal', $data['code_postal'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':ville', $data['ville'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':type', $data['type'] ?? 'appartement', PDO::PARAM_STR);
+            $stmt->bindValue(':surface', $surface, PDO::PARAM_STR);
+            $stmt->bindValue(':pieces', $pieces, PDO::PARAM_INT);
+            $stmt->bindValue(':chambres', $data['chambres'] ?? null, PDO::PARAM_INT);
+            $stmt->bindValue(':etage', $data['etage'] ?? null, PDO::PARAM_INT);
+            $stmt->bindValue(':loyer', $loyer, PDO::PARAM_STR);
+            $stmt->bindValue(':charges', $charges, PDO::PARAM_STR);
+            $stmt->bindValue(':depot_garantie', $data['depot_garantie'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':description', $data['description'] ?? null, PDO::PARAM_STR);
+            $stmt->bindValue(':equipements', $equipements, PDO::PARAM_STR);
+            $stmt->bindValue(':annee_construction', $data['annee_construction'] ?? null, PDO::PARAM_INT);
+            $stmt->bindValue(':proprietaire_id', $proprietaire_id, PDO::PARAM_INT);
+            $stmt->bindValue(':statut', $statut, PDO::PARAM_STR);
+            $stmt->bindValue(':ascenseur', $data['ascenseur'] ?? 0, PDO::PARAM_INT);
+            $stmt->bindValue(':balcon', $data['balcon'] ?? 0, PDO::PARAM_INT);
+            $stmt->bindValue(':terrasse', $data['terrasse'] ?? 0, PDO::PARAM_INT);
+            $stmt->bindValue(':jardin', $data['jardin'] ?? 0, PDO::PARAM_INT);
+            $stmt->bindValue(':cave', $data['cave'] ?? 0, PDO::PARAM_INT);
+            $stmt->bindValue(':parking', $data['parking'] ?? 0, PDO::PARAM_INT);
             
             // Exécution de la requête
-            $result = $stmt->execute();
-            
-            if ($result) {
-                $this->db->commit();
-                return true;
-            } else {
-                $this->db->rollBack();
-                throw new Exception("Erreur lors de l'ajout de l'appartement");
+            if (!$stmt->execute()) {
+                throw new Exception("Erreur lors de l'insertion de l'appartement : " . implode(', ', $stmt->errorInfo()));
             }
             
-        } catch (PDOException $e) {
-            $this->db->rollBack();
-            error_log("Erreur PDO lors de l'ajout de l'appartement: " . $e->getMessage());
-            throw new Exception("Une erreur est survenue lors de l'ajout de l'appartement");
+            // Récupération de l'ID de l'appartement inséré
+            $appartementId = $this->db->lastInsertId();
+            
+            // Traitement des photos si elles sont fournies
+            if (!empty($photos) && is_array($photos)) {
+                foreach ($photos as $photo) {
+                    if (!empty($photo['chemin'])) {
+                        $this->ajouterPhoto([
+                            'name' => basename($photo['chemin']),
+                            'tmp_name' => '../' . $photo['chemin'],
+                            'type' => mime_content_type('../' . $photo['chemin']),
+                            'size' => filesize('../' . $photo['chemin']),
+                            'error' => UPLOAD_ERR_OK
+                        ], $appartementId, isset($photo['est_principale']) && $photo['est_principale']);
+                    }
+                }
+            }
+            
+            // Validation de la transaction
+            $this->db->commit();
+            
+            return $appartementId;
+            
+        } catch (Exception $e) {
+            // En cas d'erreur, annulation de la transaction
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            
+            // Journalisation de l'erreur
+            error_log("Erreur dans ajouterAppartement: " . $e->getMessage());
+            
+            // Propagation de l'exception avec un message clair
+            throw new Exception("Impossible d'ajouter l'appartement : " . $e->getMessage());
         }
     }
-    
-
-    
     public function getAppartementsDisponibles() {
         try {
             // Journalisation pour le débogage
@@ -351,56 +484,52 @@ class AppartementController {
         try {
             // Mise à jour des informations de base de l'appartement
             $query = "UPDATE appartements SET 
-                        numero = :numero,
                         adresse = :adresse,
-                        complement_adresse = :complement_adresse,
-                        code_postal = :code_postal,
-                        ville = :ville,
+                        pieces = :pieces,
                         surface = :surface,
-                        nb_pieces = :nb_pieces,
-                        nb_chambres = :nb_chambres,
-                        nb_sdb = :nb_sdb,
+                        chambres = :chambres,
                         etage = :etage,
+                        loyer = :loyer,
+                        charges = :charges,
+                        depot_garantie = :depot_garantie,
+                        description = :description,
+                        annee_construction = :annee_construction,
+                        proprietaire_id = :proprietaire_id,
+                        statut = :statut,
                         ascenseur = :ascenseur,
                         balcon = :balcon,
                         terrasse = :terrasse,
+                        jardin = :jardin,
                         cave = :cave,
                         parking = :parking,
-                        loyer = :loyer,
-                        charges = :charges,
-                        caution = :caution,
-                        description = :description,
-                        statut = :statut,
-                        proprietaire_id = :proprietaire_id,
                         date_mise_a_jour = NOW()
                       WHERE id = :id";
             
             $stmt = $this->db->prepare($query);
             
             // Nettoyage et validation des données
-            $data = array_map('trim', $data);
+            $data = array_map(function($value) {
+                return is_string($value) ? trim($value) : $value;
+            }, $data);
             
             // Liaison des paramètres
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-            $stmt->bindParam(':numero', $data['numero'], PDO::PARAM_STR);
             $stmt->bindParam(':adresse', $data['adresse'], PDO::PARAM_STR);
-            $stmt->bindValue(':complement_adresse', !empty($data['complement_adresse']) ? $data['complement_adresse'] : null, PDO::PARAM_STR);
-            $stmt->bindParam(':code_postal', $data['code_postal'], PDO::PARAM_STR);
-            $stmt->bindParam(':ville', $data['ville'], PDO::PARAM_STR);
+            $stmt->bindParam(':pieces', $data['pieces'], PDO::PARAM_INT);
             $stmt->bindParam(':surface', $data['surface'], PDO::PARAM_STR);
-            $stmt->bindParam(':nb_pieces', $data['nb_pieces'], PDO::PARAM_INT);
-            $stmt->bindValue(':nb_chambres', !empty($data['nb_chambres']) ? $data['nb_chambres'] : 0, PDO::PARAM_INT);
-            $stmt->bindValue(':nb_sdb', !empty($data['nb_sdb']) ? $data['nb_sdb'] : 1, PDO::PARAM_INT);
-            $stmt->bindValue(':etage', !empty($data['etage']) ? $data['etage'] : null, PDO::PARAM_INT);
-            $stmt->bindValue(':ascenseur', isset($data['ascenseur']) ? 1 : 0, PDO::PARAM_INT);
-            $stmt->bindValue(':balcon', isset($data['balcon']) ? 1 : 0, PDO::PARAM_INT);
-            $stmt->bindValue(':terrasse', isset($data['terrasse']) ? 1 : 0, PDO::PARAM_INT);
-            $stmt->bindValue(':cave', isset($data['cave']) ? 1 : 0, PDO::PARAM_INT);
-            $stmt->bindValue(':parking', isset($data['parking']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindParam(':chambres', $data['chambres'], PDO::PARAM_INT);
+            $stmt->bindParam(':etage', $data['etage'], PDO::PARAM_INT);
             $stmt->bindParam(':loyer', $data['loyer'], PDO::PARAM_STR);
-            $stmt->bindValue(':charges', !empty($data['charges']) ? $data['charges'] : 0, PDO::PARAM_STR);
-            $stmt->bindValue(':caution', !empty($data['caution']) ? $data['caution'] : $data['loyer'], PDO::PARAM_STR);
+            $stmt->bindParam(':charges', $data['charges'], PDO::PARAM_STR);
+            $stmt->bindValue(':depot_garantie', !empty($data['depot_garantie']) ? $data['depot_garantie'] : null, PDO::PARAM_STR);
             $stmt->bindValue(':description', !empty($data['description']) ? $data['description'] : null, PDO::PARAM_STR);
+            $stmt->bindValue(':annee_construction', !empty($data['annee_construction']) ? $data['annee_construction'] : null, PDO::PARAM_INT);
+            $stmt->bindValue(':ascenseur', !empty($data['ascenseur']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':balcon', !empty($data['balcon']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':terrasse', !empty($data['terrasse']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':jardin', !empty($data['jardin']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':cave', !empty($data['cave']) ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':parking', !empty($data['parking']) ? 1 : 0, PDO::PARAM_INT);
             $stmt->bindParam(':statut', $data['statut'], PDO::PARAM_STR);
             $stmt->bindParam(':proprietaire_id', $data['proprietaire_id'], PDO::PARAM_INT);
             
@@ -447,57 +576,232 @@ class AppartementController {
             }
             
             // Gestion des nouvelles photos
-            if (!empty($photos)) {
-                $uploadDir = __DIR__ . '/../uploads/';
-                
-                // Vérifier si le dossier d'upload existe, sinon le créer
-                if (!file_exists($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
-                }
-                
-                // Vérifier s'il y a déjà une photo principale
-                $hasMainPhoto = false;
-                $existingPhotos = $this->getPhotosAppartement($id);
-                foreach ($existingPhotos as $photo) {
-                    if ($photo['est_principale']) {
-                        $hasMainPhoto = true;
-                        break;
-                    }
-                }
-                
-                foreach ($photos as $photo) {
-                    // Générer un nom de fichier unique
-                    $extension = pathinfo($photo['name'], PATHINFO_EXTENSION);
-                    $filename = uniqid('photo_') . '.' . $extension;
-                    $targetPath = $uploadDir . $filename;
-                    
-                    // Déplacer le fichier uploadé
-                    if (move_uploaded_file($photo['tmp_name'], $targetPath)) {
-                        // Insérer l'entrée dans la base de données
-                        $query = "INSERT INTO photos_appartement (appartement_id, chemin, est_principale) 
-                                 VALUES (?, ?, ?)";
-                        $stmt = $this->db->prepare($query);
-                        
-                        // Si c'est la première photo ou si c'est la photo principale sélectionnée
-                        $isMain = (!$hasMainPhoto || (isset($data['photo_principale']) && $data['photo_principale'] === $photo['name']));
-                        if ($isMain) $hasMainPhoto = true;
-                        
-                        $stmt->execute([$id, $filename, $isMain ? 1 : 0]);
-                    }
-                }
+            if (!empty($photos) && is_array($photos)) {
+                $this->handleUploadedFiles($id, $photos, $mainPhotoId);
             }
             
             $this->db->commit();
             return true;
-            
         } catch (PDOException $e) {
             $this->db->rollBack();
             error_log("Erreur lors de la mise à jour de l'appartement: " . $e->getMessage());
-            return false;
-        } catch (Exception $e) {
-            $this->db->rollBack();
-            error_log("Erreur lors de la mise à jour de l'appartement: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * Gère les fichiers uploadés (photos) pour un appartement
+     * 
+     * @param int $appartementId ID de l'appartement
+     * @param array $files Tableau de fichiers uploadés (format $_FILES['photos'])
+     * @param int|null $mainPhotoId ID de la photo à définir comme principale
+     * @return bool True si tout s'est bien passé
+     */
+    private function handleUploadedFiles($appartementId, $files, $mainPhotoId = null) {
+        $uploadDir = __DIR__ . '/../uploads/';
+        
+        // Vérifier si le dossier d'upload existe, sinon le créer
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        // Vérifier s'il y a déjà une photo principale
+        $hasMainPhoto = $this->hasMainPhoto($appartementId);
+        $success = true;
+        
+        // Vérifier si c'est un tableau de fichiers ou un seul fichier
+        $isMultiFile = isset($files['name']) && is_array($files['name']);
+        
+        if ($isMultiFile) {
+            // Traitement de plusieurs fichiers (format $_FILES)
+            $fileCount = count($files['name']);
+            
+            for ($i = 0; $i < $fileCount; $i++) {
+                if ($files['error'][$i] === UPLOAD_ERR_OK) {
+                    $fileInfo = [
+                        'name' => $files['name'][$i],
+                        'type' => $files['type'][$i],
+                        'tmp_name' => $files['tmp_name'][$i],
+                        'error' => $files['error'][$i],
+                        'size' => $files['size'][$i]
+                    ];
+                    
+                    if (!$this->processSingleFile($appartementId, $fileInfo, $uploadDir, $hasMainPhoto, $mainPhotoId)) {
+                        $success = false;
+                    }
+                }
+            }
+        } else {
+            // Traitement d'un seul fichier
+            if ($files['error'] === UPLOAD_ERR_OK) {
+                $success = $this->processSingleFile($appartementId, $files, $uploadDir, $hasMainPhoto, $mainPhotoId);
+            }
+        }
+        
+        return $success;
+    }
+    
+    /**
+     * Traite un seul fichier uploadé
+     * 
+     * @param int $appartementId ID de l'appartement
+     * @param array $fileInfo Informations sur le fichier
+     * @param string $uploadDir Chemin du dossier d'upload
+     * @param bool &$hasMainPhoto Référence à la variable indiquant si une photo principale existe déjà
+     * @param int|null $mainPhotoId ID de la photo à définir comme principale
+     * @return bool True si le traitement a réussi
+     */
+    private function processSingleFile($appartementId, $fileInfo, $uploadDir, &$hasMainPhoto, $mainPhotoId = null) {
+        // Vérifier le type MIME
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!in_array($fileInfo['type'], $allowedTypes)) {
+            error_log("Type de fichier non autorisé: " . $fileInfo['type']);
             return false;
         }
+        
+        // Générer un nom de fichier unique
+        $extension = pathinfo($fileInfo['name'], PATHINFO_EXTENSION);
+        $filename = uniqid('photo_') . '.' . $extension;
+        $targetPath = $uploadDir . $filename;
+        
+        // Déplacer le fichier uploadé
+        if (move_uploaded_file($fileInfo['tmp_name'], $targetPath)) {
+            // Insérer l'entrée dans la base de données
+            $query = "INSERT INTO photos_appartement (appartement_id, chemin, type_mime, taille, est_principale) 
+                     VALUES (?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($query);
+            
+            // Définir si c'est la photo principale
+            $isMain = !$hasMainPhoto || ($mainPhotoId !== null && $mainPhotoId === $fileInfo['name']);
+            if ($isMain) {
+                $hasMainPhoto = true;
+            }
+            
+            return $stmt->execute([
+                $appartementId, 
+                $filename, 
+                $fileInfo['type'],
+                $fileInfo['size'],
+                $isMain ? 1 : 0
+            ]);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Vérifie si l'appartement a déjà une photo principale
+     * 
+     * @param int $appartementId ID de l'appartement
+     * @return bool True si une photo principale existe déjà
+     */
+    private function hasMainPhoto($appartementId) {
+        $query = "SELECT COUNT(*) FROM photos_appartement 
+                 WHERE appartement_id = ? AND est_principale = 1";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$appartementId]);
+        return $stmt->fetchColumn() > 0;
+    }
+    
+    /**
+     * Récupère le dernier ID inséré dans la base de données
+     * 
+     * @return int Le dernier ID inséré
+     */
+    private function getLastInsertedId() {
+        return $this->db->lastInsertId();
+    }
+    
+    /**
+     * Affiche la structure de la table appartements
+     * 
+     * @return array La structure de la table
+     */
+    public function getTableStructure() {
+        try {
+            $tables = $this->db->query("SHOW TABLES LIKE 'appartements'")->fetchAll();
+            if (count($tables) === 0) {
+                return ['error' => "La table 'appartements' n'existe pas"];
+            }
+            
+            // Récupérer la structure de la table
+            $structure = $this->db->query("DESCRIBE appartements")->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Récupérer un exemple d'enregistrement
+            $example = $this->db->query("SELECT * FROM appartements LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+            
+            // Compter le nombre total d'enregistrements
+            $count = $this->db->query("SELECT COUNT(*) as count FROM appartements")->fetch(PDO::FETCH_ASSOC);
+            
+            return [
+                'structure' => $structure,
+                'example' => $example,
+                'count' => $count['count']
+            ];
+        } catch (PDOException $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Ajoute une photo à un appartement
+     * 
+     * @param array $fileInfo Tableau contenant les informations du fichier uploadé
+     * @param int $appartementId ID de l'appartement
+     * @param bool $isMain Si vrai, définit cette photo comme photo principale
+     * @return bool True si l'ajout a réussi
+     */
+    public function ajouterPhoto($fileInfo, $appartementId = null, $isMain = false) {
+        if ($appartementId === null) {
+            $appartementId = $this->getLastInsertedId();
+        }
+        
+        if (empty($fileInfo) || $fileInfo['error'] !== UPLOAD_ERR_OK) {
+            error_log("Erreur lors du téléchargement du fichier: " . 
+                     ($fileInfo['error'] ?? 'inconnue'));
+            return false;
+        }
+        
+        // Vérifier le type MIME
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!in_array($fileInfo['type'], $allowedTypes)) {
+            error_log("Type de fichier non autorisé: " . $fileInfo['type']);
+            return false;
+        }
+        
+        // Créer le dossier d'upload s'il n'existe pas
+        $uploadDir = __DIR__ . '/../uploads/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        // Générer un nom de fichier unique
+        $extension = pathinfo($fileInfo['name'], PATHINFO_EXTENSION);
+        $filename = uniqid('photo_') . '.' . $extension;
+        $targetPath = $uploadDir . $filename;
+        
+        // Déplacer le fichier uploadé
+        if (move_uploaded_file($fileInfo['tmp_name'], $targetPath)) {
+            // Si c'est la première photo, la définir comme principale
+            if (!$this->hasMainPhoto($appartementId)) {
+                $isMain = true;
+            }
+            
+            // Insérer l'entrée dans la base de données
+            $query = "INSERT INTO photos_appartement 
+                     (appartement_id, chemin, type_mime, taille, est_principale) 
+                     VALUES (?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($query);
+            
+            return $stmt->execute([
+                $appartementId,
+                $filename,
+                $fileInfo['type'],
+                $fileInfo['size'],
+                $isMain ? 1 : 0
+            ]);
+        }
+        
+        return false;
     }
 }

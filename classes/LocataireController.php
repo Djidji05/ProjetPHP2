@@ -80,18 +80,41 @@ class LocataireController {
     }
 
     /**
-     * Récupère la liste de tous les locataires
+     * Récupère la liste de tous les locataires avec des informations complémentaires
      * 
-     * @return array Liste des locataires
+     * @param array $filtres Tableau de filtres optionnels (ex: ['statut' => 'actif'])
+     * @return array Liste des locataires avec leurs informations
      */
-    public function listerLocataires() {
+    public function listerLocataires($filtres = []) {
         try {
-            $query = "SELECT l.*, a.numero as appartement_numero 
+            $query = "SELECT 
+                        l.*, 
+                        CONCAT(l.prenom, ' ', l.nom) as nom_complet,
+                        a.numero as appartement_numero,
+                        CONCAT(a.adresse, ', ', a.code_postal, ' ', a.ville) as adresse_appartement
                      FROM locataires l 
                      LEFT JOIN appartements a ON l.appartement_id = a.id 
-                     ORDER BY l.nom, l.prenom";
+                     WHERE 1=1";
             
-            $stmt = $this->db->query($query);
+            $params = [];
+            
+            // Filtre par statut
+            if (!empty($filtres['statut'])) {
+                $query .= " AND l.statut = :statut";
+                $params[':statut'] = $filtres['statut'];
+            }
+            
+            // Filtre par appartement
+            if (!empty($filtres['appartement_id'])) {
+                $query .= " AND l.appartement_id = :appartement_id";
+                $params[':appartement_id'] = (int)$filtres['appartement_id'];
+            }
+            
+            $query .= " ORDER BY l.nom, l.prenom";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+            
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
             
         } catch (PDOException $e) {
@@ -151,19 +174,33 @@ class LocataireController {
 
             $stmt = $this->db->prepare($query);
             
-            // Lier les paramètres
+            // Préparer les valeurs pour le binding
+            $id = (int)$id;
+            $nom = $donnees['nom'];
+            $prenom = $donnees['prenom'];
+            $email = $donnees['email'];
+            $telephone = $donnees['telephone'];
+            $adresse = $donnees['adresse'];
+            $date_naissance = !empty($donnees['date_naissance']) ? $donnees['date_naissance'] : null;
+            $date_entree = $donnees['date_entree'];
+            $loyer = (float)$donnees['loyer'];
+            $caution = isset($donnees['caution']) ? (float)$donnees['caution'] : 0;
+            $appartement_id = !empty($donnees['appartement_id']) ? (int)$donnees['appartement_id'] : null;
+            $statut = $donnees['statut'] ?? 'actif';
+            
+            // Lier les paramètres avec les variables
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-            $stmt->bindParam(':nom', $donnees['nom']);
-            $stmt->bindParam(':prenom', $donnees['prenom']);
-            $stmt->bindParam(':email', $donnees['email']);
-            $stmt->bindParam(':telephone', $donnees['telephone']);
-            $stmt->bindParam(':adresse', $donnees['adresse']);
-            $stmt->bindParam(':date_naissance', $donnees['date_naissance'] ?? null, PDO::PARAM_STR);
-            $stmt->bindParam(':date_entree', $donnees['date_entree']);
-            $stmt->bindParam(':loyer', $donnees['loyer'], PDO::PARAM_STR);
-            $stmt->bindParam(':caution', $donnees['caution'] ?? 0, PDO::PARAM_STR);
-            $stmt->bindParam(':appartement_id', $donnees['appartement_id'], PDO::PARAM_INT);
-            $stmt->bindParam(':statut', $donnees['statut'] ?? 'actif');
+            $stmt->bindParam(':nom', $nom);
+            $stmt->bindParam(':prenom', $prenom);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':telephone', $telephone);
+            $stmt->bindParam(':adresse', $adresse);
+            $stmt->bindParam(':date_naissance', $date_naissance, PDO::PARAM_STR);
+            $stmt->bindParam(':date_entree', $date_entree);
+            $stmt->bindParam(':loyer', $loyer, PDO::PARAM_STR);
+            $stmt->bindParam(':caution', $caution, PDO::PARAM_STR);
+            $stmt->bindParam(':appartement_id', $appartement_id, PDO::PARAM_INT);
+            $stmt->bindParam(':statut', $statut);
 
             return $stmt->execute();
             

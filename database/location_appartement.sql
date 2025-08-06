@@ -85,3 +85,18 @@ VALUES (
     'admin123',  -- Mot de passe en clair
     'admin'
 );
+
+CREATE TABLE IF NOT EXISTS photos_appartement (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    appartement_id INT NOT NULL,
+    chemin VARCHAR(512) NOT NULL COMMENT 'Chemin relatif du fichier photo',
+    type_mime VARCHAR(100) DEFAULT 'image/jpeg' COMMENT 'Type MIME du fichier',
+    taille INT UNSIGNED DEFAULT 0 COMMENT 'Taille du fichier en octets',
+    legende VARCHAR(255) DEFAULT NULL,
+    ordre INT DEFAULT 0 COMMENT 'Ordre d\'affichage des photos',
+    est_principale TINYINT(1) DEFAULT 0,
+    date_creation DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (appartement_id) REFERENCES appartements(id) ON DELETE CASCADE,
+    INDEX idx_photos_appartement_appartement_id (appartement_id),
+    INDEX idx_photos_appartement_ordre (ordre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

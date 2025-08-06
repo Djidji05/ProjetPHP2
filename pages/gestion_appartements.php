@@ -447,6 +447,8 @@ $proprietaires = $proprietaireController->getAllProprietaires();
     <!-- Scripts -->
     <!-- Chargement des scripts nécessaires -->
     <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Script de gestion de la suppression -->
     <script src="../js/debug_delete.js"></script>
     

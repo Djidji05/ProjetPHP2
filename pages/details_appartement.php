@@ -29,19 +29,51 @@ $contratController = new anacaona\ContratController();
 // Récupérer les données de l'appartement
 $appartement = $appartementController->getAppartementById($appartementId);
 
+// Vérifier si l'appartement existe
+if (!$appartement) {
+    die("<div class='container mt-5'><div class='alert alert-danger'>Appartement non trouvé.</div></div>");
+}
+
+// Initialisation des valeurs par défaut pour éviter les erreurs
+$defaults = [
+    'loyer' => 0,
+    'charges' => 0,
+    'depot_garantie' => 0,
+    'ascenseur' => 0,
+    'balcon' => 0,
+    'terrasse' => 0,
+    'jardin' => 0,
+    'cave' => 0,
+    'parking' => 0,
+    'surface' => 0,
+    'pieces' => 0,
+    'chambres' => 1,
+    'description' => 'Aucune description disponible',
+    'ville' => 'Non spécifiée',
+    'code_postal' => '',
+    'etage' => 'Rez-de-chaussée',
+    'date_construction' => 'Non spécifiée'
+];
+
+// Fusionner avec les valeurs par défaut
+$appartement = array_merge($defaults, $appartement);
+
+// Récupérer les photos de l'appartement
+$appartement['photos'] = $appartementController->getPhotos($appartementId);
+
 // Formatage des données pour l'affichage
 $appartement['loyer_formate'] = number_format($appartement['loyer'], 2, ',', ' ');
 $appartement['charges_formatees'] = number_format($appartement['charges'], 2, ',', ' ');
 $appartement['total_mensuel'] = number_format($appartement['loyer'] + $appartement['charges'], 2, ',', ' ');
-$appartement['depot_garantie_formate'] = $appartement['depot_garantie'] ? number_format($appartement['depot_garantie'], 2, ',', ' ') : 'Non spécifié';
+$appartement['depot_garantie_formate'] = $appartement['depot_garantie'] > 0 ? number_format($appartement['depot_garantie'], 2, ',', ' ') : 'Non spécifié';
 
 // Formatage des booléens
-$appartement['ascenseur_texte'] = $appartement['ascenseur'] ? 'Oui' : 'Non';
-$appartement['balcon_texte'] = $appartement['balcon'] ? 'Oui' : 'Non';
-$appartement['terrasse_texte'] = $appartement['terrasse'] ? 'Oui' : 'Non';
-$appartement['jardin_texte'] = $appartement['jardin'] ? 'Oui' : 'Non';
-$appartement['cave_texte'] = $appartement['cave'] ? 'Oui' : 'Non';
-$appartement['parking_texte'] = $appartement['parking'] ? 'Oui' : 'Non';
+$appartement['ascenseur_texte'] = !empty($appartement['ascenseur']) ? 'Oui' : 'Non';
+$appartement['balcon_texte'] = !empty($appartement['balcon']) ? 'Oui' : 'Non';
+$appartement['terrasse_texte'] = !empty($appartement['terrasse']) ? 'Oui' : 'Non';
+$appartement['jardin_texte'] = !empty($appartement['jardin']) ? 'Oui' : 'Non';
+$appartement['cave_texte'] = !empty($appartement['cave']) ? 'Oui' : 'Non';
+$appartement['parking_texte'] = !empty($appartement['parking']) ? 'Oui' : 'Non';
 
 // Génération de la référence
 $appartement['reference'] = 'APP-' . str_pad($appartement['id'], 5, '0', STR_PAD_LEFT);

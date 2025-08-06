@@ -233,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($appartementId) {
                         // Rediriger vers la page de détail avec un message de succès
                         $_SESSION['success_message'] = "L'appartement a été ajouté avec succès.";
-                        header('Location: detail_appartement.php?id=' . $appartementId);
+                        header('Location: details_appartement.php?id=' . $appartementId);
                         exit();
                     } else {
                         $errors[] = "Une erreur est survenue lors de l'ajout de l'appartement.";

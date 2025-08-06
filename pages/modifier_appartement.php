@@ -29,6 +29,9 @@ $appartementId = (int)$_GET['id'];
 // Récupérer les données de l'appartement
 $appartement = $appartementController->getAppartementById($appartementId);
 
+// Récupérer les photos de l'appartement
+$photos = $appartementController->getPhotos($appartementId);
+
 if (!$appartement) {
     $_SESSION['error_message'] = "Appartement non trouvé.";
     header('Location: gestion_appartements.php');
@@ -177,8 +180,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'parking' => $formData['parking']
             ];
             
-            // Mise à jour de l'appartement
-            $result = $appartementController->updateAppartement($appartementData);
+            // Préparation des paramètres pour la mise à jour
+            $id = $appartementData['id'];
+            $data = $appartementData;
+            $photos = $_FILES['photos'] ?? [];
+            $photosToDelete = !empty($_POST['photos_supprimees']) ? json_decode($_POST['photos_supprimees'], true) : [];
+            $mainPhotoId = $_POST['photo_principale'] ?? null;
+            
+            // Mise à jour de l'appartement avec tous les paramètres requis
+            $result = $appartementController->updateAppartement($id, $data, $photos, $photosToDelete, $mainPhotoId);
             
             if ($result) {
                 // Gestion des photos supprimées
@@ -208,12 +218,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($_FILES['photos']['error'][$i] === UPLOAD_ERR_OK) {
                             $tmpFilePath = $_FILES['photos']['tmp_name'][$i];
                             
-                            // Vérifier le type de fichier
-                            $fileType = mime_content_type($tmpFilePath);
+                            // Vérifier si le fichier temporaire existe et est lisible
+                            if (!is_uploaded_file($tmpFilePath)) {
+                                $errors[] = "Erreur lors du traitement du fichier " . $_FILES['photos']['name'][$i] . ".";
+                                continue;
+                            }
+                            
+                            // Vérifier le type de fichier en utilisant le type fourni par $_FILES
+                            $fileType = $_FILES['photos']['type'][$i];
                             $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
                             
                             if (!in_array($fileType, $allowedTypes)) {
-                                $errors[] = "Le type de fichier " . $_FILES['photos']['name'][$i] . " n'est pas autorisé.";
+                                $errors[] = "Le type de fichier " . $_FILES['photos']['name'][$i] . " n'est pas autorisé (type détecté: $fileType).";
                                 continue;
                             }
                             
@@ -243,12 +259,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     
-                    // Ajouter les nouvelles photos
-                    if (!empty($photos)) {
-                        foreach ($photos as $photo) {
-                            $appartementController->ajouterPhoto($photo);
-                        }
-                    }
+                    // Ajouter les nouvelles photos via la méthode updateAppartement qui gère déjà les uploads
+                    // Les fichiers sont déjà traités dans la méthode handleUploadedFiles
                 }
                 
                 // Mise à jour de la photo principale si nécessaire
@@ -257,7 +269,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 $_SESSION['success_message'] = "L'appartement a été modifié avec succès.";
-                header('Location: detail_appartement.php?id=' . $appartementId);
+                
+                // Debug: Afficher le chemin de redirection
+                $redirectUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/ANACAONA/pages/details_appartement.php?id=' . $appartementId;
+                error_log("Tentative de redirection vers : " . $redirectUrl);
+                
+                // Redirection avec URL complète
+                header('Location: ' . $redirectUrl);
                 exit();
             } else {
                 $errors[] = "Une erreur est survenue lors de la mise à jour de l'appartement.";
@@ -530,21 +548,34 @@ include '../pages/head.php';
                                     <h5 class="mb-3">Photos</h5>
                                     
                                     <!-- Photos existantes -->
-                                    <?php if (!empty($photos)): ?>
-                                        <div class="mb-4">
-                                            <label class="form-label">Photos actuelles</label>
-                                            <div class="row g-3" id="photos-existantes">
-                                                <?php foreach ($photos as $photo): ?>
-                                                    <div class="col-md-3 col-6 photo-container" data-photo-id="<?= $photo['id'] ?>">
+                                    <div class="mb-4">
+                                        <label class="form-label">Photos actuelles</label>
+                                        <div class="row g-3" id="photos-existantes">
+                                            <?php if (!empty($photos) && is_array($photos)): ?>
+                                                <?php foreach ($photos as $photo): 
+                                                    // Vérification des clés nécessaires
+                                                    if (!isset($photo['id']) || !isset($photo['chemin'])) continue;
+                                                    $photoId = htmlspecialchars($photo['id']);
+                                                    $photoPath = htmlspecialchars($photo['chemin']);
+                                                    $isMain = isset($photo['est_principale']) && $photo['est_principale'];
+                                                ?>
+                                                    <div class="col-md-3 col-6 photo-container" data-photo-id="<?= $photoId ?>">
                                                         <div class="card h-100">
-                                                            <img src="../<?= htmlspecialchars($photo['chemin']) ?>" class="card-img-top" alt="Photo de l'appartement" style="height: 150px; object-fit: cover;">
+                                                            <?php if (!empty($photoPath) && file_exists("../$photoPath")): ?>
+                                                                <img src="../<?= $photoPath ?>" class="card-img-top" alt="Photo de l'appartement" style="height: 150px; object-fit: cover;">
+                                                            <?php else: ?>
+                                                                <div class="bg-light d-flex align-items-center justify-content-center" style="height: 150px;">
+                                                                    <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                                                                </div>
+                                                            <?php endif; ?>
                                                             <div class="card-body p-2 text-center">
                                                                 <div class="form-check">
-                                                                    <input class="form-check-input" type="radio" name="photo_principale" 
-                                                                           id="photo_principale_<?= $photo['id'] ?>" 
-                                                                           value="<?= $photo['id'] ?>"
-                                                                           <?= $photo['est_principale'] ? 'checked' : '' ?>>
-                                                                    <label class="form-check-label" for="photo_principale_<?= $photo['id'] ?>">
+                                                                    <input class="form-check-input" type="radio" 
+                                                                           name="photo_principale" 
+                                                                           id="photo_principale_<?= $photoId ?>" 
+                                                                           value="<?= $photoId ?>"
+                                                                           <?= $isMain ? 'checked' : '' ?>>
+                                                                    <label class="form-check-label small" for="photo_principale_<?= $photoId ?>">
                                                                         Photo principale
                                                                     </label>
                                                                 </div>

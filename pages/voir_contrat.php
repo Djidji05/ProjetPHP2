@@ -108,7 +108,7 @@ $estActif = $dateFin > $aujourdhui;
                                     <a href="generer_pdf_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-secondary me-2" title="Télécharger PDF">
                                         <i class="bi bi-file-earmark-pdf me-1"></i> Télécharger
                                     </a>
-                                    <a href="editer_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-warning me-2" title="Modifier">
+                                    <a href="modifier_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-warning me-2" title="Modifier">
                                         <i class="bi bi-pencil me-1"></i> Modifier
                                     </a>
                                     <button class="btn btn-danger" title="Résilier" 
@@ -272,9 +272,103 @@ $estActif = $dateFin > $aujourdhui;
         </section>
     </main>
 
+    <!-- Modal de résiliation de contrat -->
+    <div class="modal fade" id="resilierContratModal" tabindex="-1" aria-labelledby="resilierContratModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="resilierContratModalLabel">Résiliation du contrat de location</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <form id="resilierContratForm" method="post" action="traitement_resiliation.php">
+                    <input type="hidden" name="contrat_id" value="<?= $contrat['id'] ?>">
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Vous êtes sur le point de résilier le contrat de location. Cette action est irréversible.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="date_resiliation" class="form-label">Date de résiliation <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="date_resiliation" name="date_resiliation" 
+                                   value="<?= date('Y-m-d') ?>" min="<?= $contrat['date_debut'] ?>" 
+                                   max="<?= $contrat['date_fin'] ?>" required>
+                            <div class="form-text">La date de résiliation doit être comprise entre le début et la fin du contrat.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="motif" class="form-label">Motif de la résiliation <span class="text-danger">*</span></label>
+                            <select class="form-select" id="motif" name="motif" required>
+                                <option value="">Sélectionnez un motif...</option>
+                                <option value="fin_bail">Fin de bail</option>
+                                <option value="vente">Vente du bien</option>
+                                <option value="expulsion">Expulsion</option>
+                                <option value="accord_parti">Accord des deux parties</option>
+                                <option value="autre">Autre motif</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="commentaires" class="form-label">Commentaires (optionnel)</label>
+                            <textarea class="form-control" id="commentaires" name="commentaires" rows="3" 
+                                      placeholder="Détails sur la résiliation, raisons, observations..."></textarea>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirmation" required>
+                            <label class="form-check-label" for="confirmation">
+                                Je confirme vouloir résilier ce contrat de location
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-danger">Confirmer la résiliation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <?php include("footer.php"); ?>
     <!-- End Footer -->
+    
+    <script>
+    // Fonction pour confirmer la résiliation du contrat
+    function confirmerResiliation(contratId) {
+        // Afficher le modal de résiliation
+        var modal = new bootstrap.Modal(document.getElementById('resilierContratModal'));
+        modal.show();
+    }
+    
+    // Gérer la soumission du formulaire de résiliation
+    document.getElementById('resilierContratForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Vérifier la confirmation
+        if (!document.getElementById('confirmation').checked) {
+            alert('Veuillez confirmer que vous souhaitez résilier le contrat.');
+            return false;
+        }
+        
+        // Vérifier la date de résiliation
+        const dateDebut = new Date('<?= $contrat['date_debut'] ?>');
+        const dateFin = new Date('<?= $contrat['date_fin'] ?>');
+        const dateResiliation = new Date(document.getElementById('date_resiliation').value);
+        
+        if (dateResiliation < dateDebut || dateResiliation > dateFin) {
+            alert('La date de résiliation doit être comprise entre le début et la fin du contrat.');
+            return false;
+        }
+        
+        // Afficher un message de confirmation
+        if (confirm('Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.')) {
+            // Soumettre le formulaire
+            this.submit();
+        }
+    });
+    </script>
 
     <script>
         function confirmerResiliation(id) {

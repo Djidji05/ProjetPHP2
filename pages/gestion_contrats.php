@@ -119,7 +119,7 @@ $contrats = $pdo->query($query)->fetchAll();
                                                     <a href="voir_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-info btn-sm" title="Voir">
                                                         <i class="bi bi-eye"></i>
                                                     </a>
-                                                    <a href="editer_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-warning btn-sm" title="Modifier">
+                                                    <a href="modifier_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-warning btn-sm" title="Modifier">
                                                         <i class="bi bi-pencil"></i>
                                                     </a>
                                                     <a href="generer_pdf_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-secondary btn-sm" title="Télécharger PDF">

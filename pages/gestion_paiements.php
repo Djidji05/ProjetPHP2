@@ -36,10 +36,16 @@ $paiements = $paiementController->listerPaiements($filtres);
     </style>
 </head>
 <body>
-    <?php include("header.php"); ?>
-    <?php include("sidebar.php"); ?>
 
-    <main id="main" class="main">
+<!-- ======= Header ======= -->
+<?php include("header.php"); ?>
+<!-- End Header -->
+
+<!-- ======= Sidebar ======= -->
+<?php include("sidebar.php"); ?>
+<!-- End Sidebar-->
+
+<main id="main" class="main">
         <div class="pagetitle">
             <h1>Gestion des Paiements</h1>
             <nav>
@@ -125,6 +131,6 @@ $paiements = $paiementController->listerPaiements($filtres);
     </main>
 
     <?php include("footer.php"); ?>
-    <?php include("scripts.php"); ?>
+    <?php include("../includes/scripts.php"); ?>
 </body>
 </html>

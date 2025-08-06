@@ -35,6 +35,12 @@
   
   <!-- Gestion CSS -->
   <link href="../assets/css/gestion.css" rel="stylesheet">
+  
+  <!-- Formulaires CSS -->
+  <link href="../assets/css/forms.css" rel="stylesheet">
+  
+  <!-- Sidebar CSS -->
+  <link href="../assets/css/sidebar.css" rel="stylesheet">
 
   <!-- =======================================================
   * Template Name: NiceAdmin

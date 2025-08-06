@@ -1,0 +1,177 @@
+/* Style général du header */
+#header {
+    height: 70px;
+    padding: 0 2rem;
+    background-color: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    z-index: 999;
+}
+
+/* Style du logo */
+#header .logo {
+    text-decoration: none;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+#header .logo:hover {
+    color: #3498db;
+}
+
+/* Bouton de menu */
+#header .toggle-sidebar-btn {
+    color: #2c3e50;
+    font-size: 1.6rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-right: 2rem;
+}
+
+#header .toggle-sidebar-btn:hover {
+    color: #3498db;
+}
+
+/* Barre de recherche améliorée */
+#header .search-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 2rem;
+}
+
+#header .search-form {
+    position: relative;
+    width: 100%;
+}
+
+#header .search-form .input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 30px;
+    padding: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+}
+
+#header .search-form .input-group:focus-within {
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+    border-color: #3498db;
+}
+
+#header .search-form input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 0.6rem 1rem 0.6rem 1.5rem;
+    font-size: 0.95rem;
+    color: #2c3e50;
+    outline: none;
+    height: 44px;
+    border-radius: 30px 0 0 30px;
+}
+
+#header .search-form input::placeholder {
+    color: #95a5a6;
+    font-weight: 400;
+}
+
+#header .search-form .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #3498db;
+    color: white;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+#header .search-form .btn:hover {
+    background: #2980b9;
+    transform: scale(1.05);
+}
+
+#header .search-form .btn i {
+    font-size: 1rem;
+}
+
+/* Section utilisateur */
+#header .header-nav {
+    margin-left: auto;
+}
+
+#header .nav-profile {
+    color: #2c3e50;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+#header .nav-profile:hover {
+    background-color: #f8f9fa;
+    color: #3498db;
+}
+
+#header .nav-profile i {
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+    transition: all 0.3s;
+}
+
+/* Menu déroulant utilisateur */
+#header .dropdown-menu {
+    border: none;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    padding: 0.5rem 0;
+    margin-top: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+#header .dropdown-item {
+    padding: 0.5rem 1.5rem;
+    color: #2c3e50;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+#header .dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #3498db;
+}
+
+#header .dropdown-divider {
+    margin: 0.5rem 0;
+    border-color: #f1f1f1;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    #header {
+        padding: 0 1rem;
+    }
+    
+    #header .search-form {
+        min-width: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    #header .logo {
+        font-size: 1.3rem;
+    }
+    
+    #header .search-form {
+        display: none;
+    }
+}

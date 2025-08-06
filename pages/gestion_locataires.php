@@ -38,16 +38,23 @@ if (isset($_GET['delete'])) {
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <?php include("../pages/head.php"); ?>
-    <title>Gestion des Locataires</title>
+    <?php include("head.php"); ?>
+    <title>Gestion des Locataires - ANACAONA</title>
+    <style>
+        .badge-statut { padding: 0.35em 0.65em; font-size: 0.8rem; }
+        .btn-action { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .table th { white-space: nowrap; }
+    </style>
 </head>
 <body>
 
-<!-- Header -->
-<?php include("../pages/header.php"); ?>
+<!-- ======= Header ======= -->
+<?php include("header.php"); ?>
+<!-- End Header -->
 
-<!-- Sidebar -->
-<?php include("../pages/sidebar.php"); ?>
+<!-- ======= Sidebar ======= -->
+<?php include("sidebar.php"); ?>
+<!-- End Sidebar-->
 
 <main id="main" class="main">
     <div class="pagetitle">

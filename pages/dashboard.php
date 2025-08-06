@@ -12,47 +12,52 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-
 // Chargement des classes nécessaires
 use anacaona\{Utilisateur, Charge, Database, Locataire, Appartement, Contrat};
 require_once __DIR__ . '/../classes/Auto.php';
+require_once __DIR__ . '/../classes/DashboardController.php';
+use anacaona\DashboardController;
 Charge::chajeklas();
 
-// Initialisation de la base de données
-$pdo = Database::connect();
-
-// Vérifie si la méthode existe avant de l'appeler
-if (method_exists('anacaona\\Utilisateur', 'nombreUtilisateur')) {
-    $nombre = Utilisateur::nombreUtilisateur('utilisateur');
-} else {
-    // Valeur par défaut en cas d'erreur
-    $nombre = 0;
-}
+// Initialisation du contrôleur de tableau de bord
+$dashboardController = new DashboardController();
 
 // Récupération des statistiques
-$nombreLocataires = 0;
-$nombreAppartements = 0;
-$nombreProprietaires = 0;
-$nombreUtilisateurs = 0;
-$nombreContratsActifs = 0;
-$nombreContratsTotal = 0;
-$tauxOccupation = 0;
+$stats = $dashboardController->getStats();
+$activitesRecentes = $dashboardController->getActivitesRecentes(5);
+$paiementsAvenir = $dashboardController->getPaiementsAvenir();
 
-$derniersLocataires = [];
-$derniersAppartements = [];
-$derniersContrats = [];
-$activitesRecentes = [];
+// Initialisation des variables pour les graphiques avec des valeurs par défaut
+$revenusMoisLabels = '[]';
+$revenusMoisData = '[]';
+$depensesCategoriesLabels = '[]';
+$depensesCategoriesData = '[]';
+$occupationLabels = '[]';
+$occupationData = '[]';
 
-try {
-    // Compter le nombre de locataires
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM locataires");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $nombreLocataires = $result['total'] ?? 0;
+// Vérification et encodage des données pour les graphiques
+if (isset($stats['revenus_12_mois'])) {
+    $revenusMoisLabels = json_encode($stats['revenus_12_mois']['labels'] ?? []);
+    $revenusMoisData = json_encode($stats['revenus_12_mois']['data'] ?? []);
+}
 
-    // Compter le nombre d'appartements
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM appartements");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $nombreAppartements = $result['total'] ?? 0;
+if (isset($stats['depenses_par_categorie'])) {
+    $depensesCategoriesLabels = json_encode($stats['depenses_par_categorie']['labels'] ?? []);
+    $depensesCategoriesData = json_encode($stats['depenses_par_categorie']['data'] ?? []);
+}
+
+if (isset($stats['occupation_par_immeuble'])) {
+    $occupationLabels = json_encode($stats['occupation_par_immeuble']['labels'] ?? []);
+    $occupationData = json_encode($stats['occupation_par_immeuble']['data'] ?? []);
+}
+
+// Initialisation de la connexion PDO
+$pdo = Database::connect();
+
+// Compter le nombre d'appartements
+$stmt = $pdo->query("SELECT COUNT(*) as total FROM appartements");
+$result = $stmt->fetch(PDO::FETCH_ASSOC);
+$nombreAppartements = $result['total'] ?? 0;
     
     // Compter le nombre de propriétaires
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM proprietaires");
@@ -86,7 +91,7 @@ try {
     // Récupérer les 5 derniers appartements
     $stmt = $pdo->query("
         SELECT a.*, 
-               (SELECT COUNT(*) FROM contrats c WHERE c.appartement_id = a.id AND c.date_fin >= CURDATE()) as contrat_actif
+               (SELECT COUNT(*) FROM contrats c WHERE c.id_appartement = a.id AND c.date_fin >= CURDATE()) as contrat_actif
         FROM appartements a 
         ORDER BY a.date_creation DESC 
         LIMIT 5
@@ -100,46 +105,87 @@ try {
     unset($appart); // Casser la référence
     $derniersAppartements = $appartements;
 
+    // Récupérer le nombre total de locataires
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM locataires");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $nombreLocataires = $result['total'] ?? 0;
+
     // Récupérer les 5 derniers contrats avec les noms des locataires et adresses des appartements
     $stmt = $pdo->query("
         SELECT c.*, 
                CONCAT(l.nom, ' ', l.prenom) as locataire_nom,
                a.adresse as appartement_adresse
         FROM contrats c
-        LEFT JOIN locataires l ON c.locataire_id = l.id
-        LEFT JOIN appartements a ON c.appartement_id = a.id
-        ORDER BY c.date_creation DESC 
+        LEFT JOIN locataires l ON c.id_locataire = l.id
+        LEFT JOIN appartements a ON c.id_appartement = a.id
+        ORDER BY c.date_debut DESC 
         LIMIT 5
     ");
     $derniersContrats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Récupérer les 10 dernières activités
+    // Récupérer les 10 dernières activités avec conversion explicite de la collation
     $stmt = $pdo->query("
-        (SELECT 'locataire' as type, id, CONCAT('Ajout du locataire: ', nom, ' ', prenom) as description, date_creation 
-         FROM locataires 
-         ORDER BY date_creation DESC 
-         LIMIT 3)
-        UNION ALL
-        (SELECT 'appartement' as type, id, CONCAT('Ajout de l\'appartement: ', adresse) as description, date_creation 
-         FROM appartements 
-         ORDER BY date_creation DESC 
-         LIMIT 3)
-        UNION ALL
-        (SELECT 'contrat' as type, id, CONCAT('Nouveau contrat: #', reference) as description, date_creation 
-         FROM contrats 
-         ORDER BY date_creation DESC 
-         LIMIT 4)
-        ORDER BY date_creation DESC 
+        SELECT * FROM (
+            (SELECT 
+                CONVERT('locataire' USING utf8) COLLATE utf8_general_ci as type, 
+                id, 
+                CONVERT(CONCAT('Ajout du locataire: ', nom, ' ', prenom) USING utf8) COLLATE utf8_general_ci as description, 
+                date_creation, 
+                date_creation as tri_date
+             FROM locataires 
+             ORDER BY date_creation DESC 
+             LIMIT 3)
+            UNION ALL
+            (SELECT 
+                CONVERT('appartement' USING utf8) COLLATE utf8_general_ci as type, 
+                id, 
+                CONVERT(CONCAT('Ajout de l\'appartement: ', adresse) USING utf8) COLLATE utf8_general_ci as description, 
+                date_creation, 
+                date_creation as tri_date
+             FROM appartements 
+             ORDER BY date_creation DESC 
+             LIMIT 3)
+            UNION ALL
+            (SELECT 
+                CONVERT('contrat' USING utf8) COLLATE utf8_general_ci as type, 
+                id, 
+                CONVERT(CONCAT('Nouveau contrat #', id) USING utf8) COLLATE utf8_general_ci as description, 
+                date_debut as date_creation, 
+                date_debut as tri_date
+             FROM contrats 
+             ORDER BY date_debut DESC 
+             LIMIT 4)
+        ) as activites
+        ORDER BY tri_date DESC 
         LIMIT 10
     ");
     $activitesRecentes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-} catch (PDOException $e) {
-    // En cas d'erreur, on peut logger l'erreur et continuer avec des tableaux vides
-    error_log("Erreur lors de la récupération des données du tableau de bord: " . $e->getMessage());
+// Gestion des erreurs
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Fonction pour formater les montants
+function formatMontant($montant) {
+    return number_format($montant, 2, ',', ' ') . ' €';
 }
-?>
-<!DOCTYPE html>
+
+// Fonction pour obtenir une couleur en fonction du montant
+function getCouleurMontant($montant) {
+    return $montant >= 0 ? 'success' : 'danger';
+}
+
+// Fonction pour obtenir une icône de tendance
+function getIconeTendance($valeur) {
+    if ($valeur > 0) {
+        return '<i class="bi bi-arrow-up-circle text-success"></i>';
+    } elseif ($valeur < 0) {
+        return '<i class="bi bi-arrow-down-circle text-danger"></i>';
+    } else {
+        return '<i class="bi bi-dash-circle text-secondary"></i>';
+    }
+}
+?><!DOCTYPE html>
 <html lang="fr">
 <!-- ======= Head ======= -->
 <?php include(__DIR__ . "/head.php"); ?>
@@ -149,10 +195,6 @@ try {
   <!-- ======= Header ======= -->
   <?php include("header.php"); ?>
   <!-- End Header -->
-
-  <!-- ======= Sidebar ======= -->
-  <?php include("menu.php"); ?>
-  <!-- End Sidebar -->
 
   <!-- ======= Sidebar ======= -->
   <aside id="sidebar" class="sidebar">
@@ -165,192 +207,288 @@ try {
       </li>
       <!-- End Dashboard Nav -->
 
-      <!-- Sidebar / menu-->
+      <!-- Sidebar / menu -->
       <?php include(__DIR__ . "/menu.php"); ?>
-      <!-- End Sidebar-->
+      <!-- End Sidebar -->
     </ul>
   </aside>
-  <!-- End Sidebar-->
+  <!-- End Sidebar -->
 
   <main id="main" class="main">
     <section class="section dashboard">
+      <!-- Ligne des cartes principales en haut -->
+      <div class="row mb-4">
+        <!-- Carte Utilisateurs -->
+        <div class="col-xxl-3 col-md-6 mb-3">
+          <div class="card h-100 highlight-card users">
+            <div class="card-body">
+              <div class="d-flex align-items-center">
+                <div class="card-icon bg-primary bg-opacity-10">
+                  <i class="bi bi-people text-primary"></i>
+                </div>
+                <div>
+                  <h6 class="card-title text-muted mb-1">Utilisateurs</h6>
+                  <h3 class="mb-0"><?php echo $nombreUtilisateurs; ?></h3>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a href="gestion_utilisateurs.php" class="small text-primary text-decoration-none">
+                  Voir tous <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Carte Appartements -->
+        <div class="col-xxl-3 col-md-6 mb-3">
+          <div class="card h-100 highlight-card appartements">
+            <div class="card-body">
+              <div class="d-flex align-items-center">
+                <div class="card-icon bg-info bg-opacity-10">
+                  <i class="bi bi-house text-info"></i>
+                </div>
+                <div>
+                  <h6 class="card-title text-muted mb-1">Appartements</h6>
+                  <h3 class="mb-0"><?php echo $nombreAppartements; ?></h3>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a href="gestion_appartements.php" class="small text-info text-decoration-none">
+                  Voir tous <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Carte Locataires -->
+        <div class="col-xxl-3 col-md-6 mb-3">
+          <div class="card h-100 highlight-card locataires">
+            <div class="card-body">
+              <div class="d-flex align-items-center">
+                <div class="card-icon bg-success bg-opacity-10">
+                  <i class="bi bi-people-fill text-success"></i>
+                </div>
+                <div>
+                  <h6 class="card-title text-muted mb-1">Locataires</h6>
+                  <h3 class="mb-0"><?php echo $nombreLocataires; ?></h3>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a href="gestion_locataires.php" class="small text-success text-decoration-none">
+                  Voir tous <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Carte Propriétaires -->
+        <div class="col-xxl-3 col-md-6 mb-3">
+          <div class="card h-100 highlight-card proprietaires">
+            <div class="card-body">
+              <div class="d-flex align-items-center">
+                <div class="card-icon bg-warning bg-opacity-10">
+                  <i class="bi bi-house-door text-warning"></i>
+                </div>
+                <div>
+                  <h6 class="card-title text-muted mb-1">Propriétaires</h6>
+                  <h3 class="mb-0"><?php echo $nombreProprietaires; ?></h3>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a href="gestion_proprietaires.php" class="small text-warning text-decoration-none">
+                  Voir tous <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Carte Contrats -->
+        <div class="col-xxl-3 col-md-6 mb-3">
+          <div class="card h-100 highlight-card contrats">
+            <div class="card-body">
+              <div class="d-flex align-items-center">
+                <div class="card-icon bg-danger bg-opacity-10">
+                  <i class="bi bi-file-earmark-text text-danger"></i>
+                </div>
+                <div>
+                  <h6 class="card-title text-muted mb-1">Contrats</h6>
+                  <h3 class="mb-0"><?php echo $nombreContrats ?? '0'; ?></h3>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a href="gestion_contrats.php" class="small text-danger text-decoration-none">
+                  Voir tous <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Contenu principal -->
       <div class="row">
-
-        <!-- Left side columns -->
-        <div class="col-lg-8">
+        <div class="col-12">
           <div class="row">
-            <!-- Carte Utilisateurs -->
-            <div class="col-xxl-3 col-md-6 mb-3">
-              <div class="card h-100">
+            <!-- Carte Revenus du mois -->
+            <div class="col-xxl-3 col-md-6 mb-4">
+              <div class="card info-card revenue-card">
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                      <h6 class="card-title text-muted mb-1">Utilisateurs</h6>
-                      <h3 class="mb-0"><?php echo $nombreUtilisateurs; ?></h3>
-                    </div>
-                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
-                      <i class="bi bi-people fs-4 text-primary"></i>
-                    </div>
-                  </div>
-                  <div class="mt-3">
-                    <a href="gestion_utilisateurs.php" class="small text-primary text-decoration-none">
-                      Voir tous <i class="bi bi-arrow-right"></i>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Fin Carte Utilisateurs -->
-            
-            <!-- Carte Propriétaires -->
-            <div class="col-xxl-3 col-md-6 mb-3">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                      <h6 class="card-title text-muted mb-1">Propriétaires</h6>
-                      <h3 class="mb-0"><?php echo $nombreProprietaires; ?></h3>
-                    </div>
-                    <div class="bg-success bg-opacity-10 p-3 rounded-circle">
-                      <i class="bi bi-house-door fs-4 text-success"></i>
-                    </div>
-                  </div>
-                  <div class="mt-3">
-                    <a href="gestion_proprietaires.php" class="small text-success text-decoration-none">
-                      Voir tous <i class="bi bi-arrow-right"></i>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Fin Carte Propriétaires -->
-
-     
-            <!-- Carte Locataires -->
-            <div class="col-xxl-3 col-md-6 mb-3">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                      <h6 class="card-title text-muted mb-1">Locataires</h6>
-                      <h3 class="mb-0"><?php echo $nombreLocataires; ?></h3>
-                    </div>
-                    <div class="bg-info bg-opacity-10 p-3 rounded-circle">
-                      <i class="bi bi-people-fill fs-4 text-info"></i>
-                    </div>
-                  </div>
-                  <div class="mt-3">
-                    <a href="gestion_locataires.php" class="small text-info text-decoration-none">
-                      Voir tous <i class="bi bi-arrow-right"></i>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- End Revenue Card -->
-
-            <!-- Customers Card -->
-            <div class="col-xxl-4 col-xl-12">
-
-              <div class="card info-card customers-card">
-
-                <div class="filter">
-                  <a class="icon" href="#" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></a>
-                  <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-                    <li class="dropdown-header text-start">
-                      <h6>Filter</h6>
-                    </li>
-
-                    <li><a class="dropdown-item" href="#">Today</a></li>
-                    <li><a class="dropdown-item" href="#">This Month</a></li>
-                    <li><a class="dropdown-item" href="#">This Year</a></li>
-                  </ul>
-                </div>
-
-                <div class="card-body">
-                  <h5 class="card-title">Customers <span>| This Year</span></h5>
-
+                  <h5 class="card-title">Revenus <span>| Ce mois</span></h5>
                   <div class="d-flex align-items-center">
                     <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-people"></i>
+                      <i class="bi bi-currency-euro"></i>
                     </div>
                     <div class="ps-3">
-                      <h6>1244</h6>
-                      <span class="text-danger small pt-1 fw-bold">12%</span> <span class="text-muted small pt-2 ps-1">decrease</span>
-
+                      <h6><?= formatMontant($stats['revenus_mois_courant']) ?></h6>
+                      <span class="text-<?= getCouleurMontant($stats['revenus_mois_courant']) ?> small pt-1 fw-bold">
+                        <?= getIconeTendance(10) ?> 10% vs mois dernier
+                      </span>
                     </div>
-                  </div>
-
-                </div>
-              </div>
-
-            </div><!-- End Customers Card -->
-
-            <!-- Locataires Card -->
-            <div class="col-xxl-4 col-md-6">
-              <div class="card info-card">
-                <div class="card-body">
-                  <h5 class="card-title">Locataires</h5>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                      <div class="card-icon rounded-circle d-flex align-items-center justify-content-center me-3">
-                        <i class="bi bi-people-fill"></i>
-                      </div>
-                      <div>
-                        <h6><?php echo $nombreLocataires ?? '0'; ?></h6>
-                        <span class="text-muted small">Locataires enregistrés</span>
-                      </div>
-                    </div>
-                    <a href="gestion_locataires.php" class="btn btn-sm btn-outline-primary">Voir tout</a>
                   </div>
                 </div>
               </div>
             </div>
-            <!-- End Locataires Card -->
 
-            <!-- Appartements Card -->
-            <div class="col-xxl-4 col-md-6">
-              <div class="card info-card">
+            <!-- Carte Dépenses du mois -->
+            <div class="col-xxl-3 col-md-6 mb-4">
+              <div class="card info-card expenses-card">
                 <div class="card-body">
-                  <h5 class="card-title">Appartements</h5>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                      <div class="card-icon rounded-circle d-flex align-items-center justify-content-center me-3">
-                        <i class="bi bi-house-door"></i>
-                      </div>
-                      <div>
-                        <h6><?php echo $nombreAppartements ?? '0'; ?></h6>
-                        <span class="text-muted small">Appartements enregistrés</span>
-                      </div>
+                  <h5 class="card-title">Dépenses <span>| Ce mois</span></h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-cash-stack"></i>
                     </div>
-                    <a href="gestion_appartements.php" class="btn btn-sm btn-outline-primary">Voir tout</a>
+                    <div class="ps-3">
+                      <h6><?= formatMontant($stats['depenses_mois_courant']) ?></h6>
+                      <span class="text-<?= getCouleurMontant(-5) ?> small pt-1 fw-bold">
+                        <?= getIconeTendance(-5) ?> 5% vs mois dernier
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <!-- End Appartements Card -->
 
-            <!-- Contrats Card -->
-            <div class="col-xxl-4 col-md-6">
-              <div class="card info-card">
+            <!-- Carte Bénéfices -->
+            <div class="col-xxl-3 col-md-6 mb-4">
+              <div class="card info-card sales-card">
                 <div class="card-body">
-                  <h5 class="card-title">Contrats</h5>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                      <div class="card-icon rounded-circle d-flex align-items-center justify-content-center me-3">
-                        <i class="bi bi-file-earmark-text"></i>
-                      </div>
-                      <div>
-                        <h6><?php echo $nombreContrats ?? '0'; ?></h6>
-                        <span class="text-muted small">Contrats actifs</span>
-                      </div>
+                  <h5 class="card-title">Bénéfices <span>| Ce mois</span></h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-graph-up-arrow"></i>
                     </div>
-                    <a href="gestion_contrats.php" class="btn btn-sm btn-outline-primary">Voir tout</a>
+                    <div class="ps-3">
+                      <h6><?= formatMontant($stats['benefices_mois']) ?></h6>
+                      <span class="text-<?= getCouleurMontant($stats['benefices_mois']) ?> small pt-1 fw-bold">
+                        <?= getIconeTendance(12) ?> 12% vs mois dernier
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <!-- End Contrats Card -->
+
+            <!-- Carte Taux d'occupation -->
+            <div class="col-xxl-3 col-md-6 mb-4">
+              <div class="card info-card customers-card">
+                <div class="card-body">
+                  <h5 class="card-title">Taux d'occupation</h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-house-check"></i>
+                    </div>
+                    <div class="ps-3">
+                      <h6><?= $stats['taux_occupation'] ?>%</h6>
+                      <span class="text-<?= $stats['taux_occupation'] > 70 ? 'success' : 'warning' ?> small pt-1 fw-bold">
+                        <?= $stats['appartements_loues'] ?> / <?= $stats['appartements_loues'] + $stats['appartements_libres'] ?> apparts
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Graphiques -->
+          <div class="row">
+            <!-- Graphique des revenus sur 12 mois -->
+            <div class="col-12 col-lg-8">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Revenus des 12 derniers mois</h5>
+                  <div id="revenueChart" style="min-height: 300px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Graphique des dépenses par catégorie -->
+            <div class="col-12 col-lg-4">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Dépenses par catégorie</h5>
+                  <div id="expenseChart" style="min-height: 300px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Autres graphiques -->
+          <div class="row mt-4">
+            <!-- Taux d'occupation par immeuble -->
+            <div class="col-12 col-lg-6">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Taux d'occupation par immeuble</h5>
+                  <div id="occupationChart" style="min-height: 300px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paiements à venir -->
+            <div class="col-12 col-lg-6">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Paiements à venir (7 jours)</h5>
+                  <?php if (!empty($paiementsAvenir)): ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover">
+                        <thead>
+                          <tr>
+                            <th>Locataire</th>
+                            <th>Montant</th>
+                            <th>Échéance</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php foreach ($paiementsAvenir as $paiement): ?>
+                            <tr>
+                              <td><?= htmlspecialchars($paiement['prenom'] . ' ' . $paiement['nom']) ?></td>
+                              <td><?= formatMontant($paiement['montant']) ?></td>
+                              <td><?= date('d/m/Y', strtotime($paiement['date_limite'])) ?></td>
+                              <td>
+                                <a href="paiement_details.php?id=<?= $paiement['id'] ?>" class="btn btn-sm btn-outline-primary">
+                                  <i class="bi bi-eye"></i>
+                                </a>
+                              </td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  <?php else: ?>
+                    <div class="alert alert-info">Aucun paiement à venir dans les 7 prochains jours.</div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+          </div>
+
 
             <!-- Liste des Derniers Ajouts -->
             <div class="col-12">
@@ -434,7 +572,7 @@ try {
                         <table class="table table-hover">
                           <thead>
                             <tr>
-                              <th>Référence</th>
+                              <th>ID</th>
                               <th>Locataire</th>
                               <th>Appartement</th>
                               <th>Date début</th>
@@ -445,7 +583,7 @@ try {
                           <tbody>
                             <?php foreach ($derniersContrats as $contrat): ?>
                               <tr>
-                                <td><?php echo htmlspecialchars($contrat['reference']); ?></td>
+                                <td>#<?php echo htmlspecialchars($contrat['id']); ?></td>
                                 <td><?php echo htmlspecialchars($contrat['locataire_nom'] ?? 'N/A'); ?></td>
                                 <td><?php echo htmlspecialchars($contrat['appartement_adresse'] ?? 'N/A'); ?></td>
                                 <td><?php echo date('d/m/Y', strtotime($contrat['date_debut'])); ?></td>
@@ -644,6 +782,179 @@ try {
       }
     }
   </script>
+
+  <!-- ======= Graphiques avec ApexCharts ======= -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Graphique des revenus sur 12 mois
+    var revenueChartOptions = {
+        series: [{
+            name: 'Revenus',
+            data: <?= $revenusMoisData ?>
+        }],
+        chart: {
+            type: 'area',
+            height: 350,
+            zoom: {
+                enabled: false
+            },
+            toolbar: {
+                show: true
+            }
+        },
+        colors: ['#4154f1'],
+        dataLabels: {
+            enabled: false
+        },
+        stroke: {
+            curve: 'smooth',
+            width: 2
+        },
+        xaxis: {
+            type: 'category',
+            categories: <?= $revenusMoisLabels ?>,
+            labels: {
+                style: {
+                    colors: '#6c757d',
+                    fontSize: '12px'
+                }
+            }
+        },
+        yaxis: {
+            labels: {
+                formatter: function(value) {
+                    return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR'});
+                },
+                style: {
+                    colors: '#6c757d',
+                    fontSize: '12px'
+                }
+            }
+        },
+        tooltip: {
+            y: {
+                formatter: function(value) {
+                    return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR'});
+                }
+            }
+        }
+    };
+
+    var revenueChart = new ApexCharts(document.querySelector("#revenueChart"), revenueChartOptions);
+    revenueChart.render();
+
+    // Graphique des dépenses par catégorie
+    var expenseChartOptions = {
+        series: <?= $depensesCategoriesData ?>,
+        chart: {
+            type: 'donut',
+            height: 350
+        },
+        labels: <?= $depensesCategoriesLabels ?>,
+        colors: ['#2ecc71', '#3498db', '#f39c12', '#e74c3c', '#9b59b6', '#1abc9c', '#d35400'],
+        legend: {
+            position: 'bottom'
+        },
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '65%',
+                    labels: {
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Total',
+                            formatter: function(w) {
+                                const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                return sum.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR'});
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dataLabels: {
+            enabled: false
+        },
+        tooltip: {
+            y: {
+                formatter: function(value) {
+                    return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR'});
+                }
+            }
+        }
+    };
+
+    var expenseChart = new ApexCharts(document.querySelector("#expenseChart"), expenseChartOptions);
+    expenseChart.render();
+
+    // Graphique du taux d'occupation par immeuble
+    var occupationChartOptions = {
+        series: [{
+            name: 'Taux d\'occupation',
+            data: <?= $occupationData ?>
+        }],
+        chart: {
+            type: 'bar',
+            height: 350,
+            toolbar: {
+                show: true
+            }
+        },
+        plotOptions: {
+            bar: {
+                horizontal: false,
+                columnWidth: '55%',
+                endingShape: 'rounded'
+            },
+        },
+        colors: ['#3f37c9'],
+        dataLabels: {
+            enabled: false
+        },
+        stroke: {
+            show: true,
+            width: 2,
+            colors: ['transparent']
+        },
+        xaxis: {
+            categories: <?= $occupationLabels ?>,
+            labels: {
+                style: {
+                    colors: '#6c757d',
+                    fontSize: '12px'
+                }
+            }
+        },
+        yaxis: {
+            title: {
+                text: 'Taux d\'occupation (%)'
+            },
+            max: 100,
+            labels: {
+                style: {
+                    colors: '#6c757d',
+                    fontSize: '12px'
+                }
+            }
+        },
+        fill: {
+            opacity: 1
+        },
+        tooltip: {
+            y: {
+                formatter: function(val) {
+                    return val + "%";
+                }
+            }
+        }
+    };
+
+    var occupationChart = new ApexCharts(document.querySelector("#occupationChart"), occupationChartOptions);
+    occupationChart.render();
+});
+</script>
 
 </body>
 
