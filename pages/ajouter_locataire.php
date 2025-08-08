@@ -23,28 +23,58 @@ $message_type = '';
 
 // Traitement du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $donnees = [
-        'nom' => $_POST['nom'] ?? '',
-        'prenom' => $_POST['prenom'] ?? '',
-        'email' => $_POST['email'] ?? '',
-        'telephone' => $_POST['telephone'] ?? '',
-        'adresse' => $_POST['adresse'] ?? '',
-        'date_naissance' => $_POST['date_naissance'] ?? null,
-        'date_entree' => $_POST['date_entree'] ?? date('Y-m-d'),
-        'loyer' => $_POST['loyer'] ?? 0,
-        'caution' => $_POST['caution'] ?? 0,
-        'appartement_id' => $_POST['appartement_id'] ?? null,
-        'statut' => 'actif'
-    ];
-
-    if ($locataireController->ajouterLocataire($donnees)) {
-        $_SESSION['message'] = 'Locataire ajouté avec succès';
-        $_SESSION['message_type'] = 'success';
-        header('Location: gestion_locataires.php');
-        exit();
-    } else {
-        $message = 'Une erreur est survenue lors de l\'ajout du locataire';
+    try {
+        // Nettoyer et valider les données
+        $donnees = [
+            'nom' => trim($_POST['nom'] ?? ''),
+            'prenom' => trim($_POST['prenom'] ?? ''),
+            'email' => filter_var(trim($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null,
+            'telephone' => !empty(trim($_POST['telephone'] ?? '')) ? trim($_POST['telephone']) : null,
+            'adresse' => !empty(trim($_POST['adresse'] ?? '')) ? trim($_POST['adresse']) : null,
+            'date_naissance' => !empty($_POST['date_naissance']) ? $_POST['date_naissance'] : null,
+            'date_entree' => $_POST['date_entree'] ?? date('Y-m-d'),
+            'loyer' => (float)($_POST['loyer'] ?? 0),
+            'caution' => isset($_POST['caution']) ? (float)$_POST['caution'] : 0,
+            'appartement_id' => !empty($_POST['appartement_id']) ? (int)$_POST['appartement_id'] : null,
+            'statut' => 'actif'
+        ];
+        
+        // Validation supplémentaire
+        if (empty($donnees['nom'])) {
+            throw new \Exception('Le nom est obligatoire');
+        }
+        if (empty($donnees['prenom'])) {
+            throw new \Exception('Le prénom est obligatoire');
+        }
+        if (empty($donnees['date_entree'])) {
+            throw new \Exception('La date d\'entrée est obligatoire');
+        }
+        
+        // Tenter d'ajouter le locataire
+        $locataireId = $locataireController->ajouterLocataire($donnees);
+        
+        if ($locataireId) {
+            $_SESSION['message'] = 'Locataire ajouté avec succès (ID: ' . $locataireId . ')';
+            $_SESSION['message_type'] = 'success';
+            header('Location: gestion_locataires.php');
+            exit();
+        } else {
+            throw new \Exception('L\'ajout du locataire a échoué sans message d\'erreur spécifique');
+        }
+        
+    } catch (\Exception $e) {
+        $message = 'Erreur : ' . $e->getMessage();
         $message_type = 'danger';
+        
+        // Afficher les erreurs dans les logs pour le débogage
+        error_log('Erreur lors de l\'ajout d\'un locataire : ' . $e->getMessage());
+        error_log('Trace : ' . $e->getTraceAsString());
+        
+        // Si c'est une erreur PDO, afficher plus de détails
+        if ($e instanceof PDOException) {
+            $message .= ' (Erreur SQL: ' . $e->getCode() . ')';
+            error_log('Erreur PDO : ' . print_r($e->errorInfo, true));
+        }
     }
 }
 ?>
@@ -140,7 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="col-md-6">
                                 <label for="loyer" class="form-label">Loyer mensuel (€)</label>
-                                <input type="number" step="0.01" class="form-control" id="loyer" name="loyer">
+                                <input type="number" step="0.01" class="form-control" id="loyer" name="loyer" required min="0">
+                                <div class="invalid-feedback">Veuillez entrer un montant de loyer valide.</div>
                             </div>
                             
                             <div class="col-md-6">

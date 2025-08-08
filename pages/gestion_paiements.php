@@ -1,11 +1,12 @@
 <?php
-// Vérification de la session
+// Vérification de la session et des droits d'accès
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Vérification des droits d'accès
+// Vérification de l'authentification et des rôles
 require_once '../includes/auth_check.php';
+require_once '../includes/role_check.php';
 require_once '../classes/Database.php';
 require_once '../classes/PaiementController.php';
 
@@ -23,6 +24,9 @@ if (isset($_GET['statut'])) $filtres['statut'] = $_GET['statut'];
 
 // Récupération de la liste des paiements
 $paiements = $paiementController->listerPaiements($filtres);
+
+// Debug: Afficher le contenu de $paiements
+error_log("Contenu de \$paiements: " . print_r($paiements, true));
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -59,6 +63,29 @@ $paiements = $paiementController->listerPaiements($filtres);
         <section class="section">
             <div class="row">
                 <div class="col-12">
+                    <!-- Affichage des messages de succès et d'erreur -->
+                    <?php if (isset($_SESSION['message_succes'])): ?>
+                        <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                            <i class="bi bi-check-circle me-1"></i>
+                            <?php 
+                            echo htmlspecialchars($_SESSION['message_succes']); 
+                            unset($_SESSION['message_succes']);
+                            ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (isset($_SESSION['message_erreur'])): ?>
+                        <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                            <i class="bi bi-exclamation-octagon me-1"></i>
+                            <?php 
+                            echo htmlspecialchars($_SESSION['message_erreur']); 
+                            unset($_SESSION['message_erreur']);
+                            ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+                    
                     <div class="card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -115,6 +142,13 @@ $paiements = $paiementController->listerPaiements($filtres);
                                                         <a href="modifier_paiement.php?id=<?php echo $paiement['id']; ?>" class="btn btn-sm btn-outline-secondary btn-action" title="Modifier">
                                                             <i class="bi bi-pencil"></i>
                                                         </a>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger btn-action btn-supprimer" 
+                                                                data-id="<?php echo $paiement['id']; ?>" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#confirmationSuppression"
+                                                                title="Supprimer">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -130,7 +164,129 @@ $paiements = $paiementController->listerPaiements($filtres);
         </section>
     </main>
 
+    <!-- Modal de confirmation de suppression -->
+    <div class="modal fade" id="confirmationSuppression" tabindex="-1" aria-labelledby="confirmationSuppressionLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="confirmationSuppressionLabel">Confirmer la suppression</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    Êtes-vous sûr de vouloir supprimer ce paiement ? Cette action est irréversible.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <a href="#" id="btnConfirmerSuppression" class="btn btn-danger">Supprimer</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <?php include("footer.php"); ?>
     <?php include("../includes/scripts.php"); ?>
+    
+    <script>
+    // Gestion de la suppression d'un paiement
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM chargé, initialisation de la gestion des suppressions...');
+        
+        // Vérifier si Bootstrap est chargé
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap n\'est pas chargé correctement');
+            // Fallback: utiliser des confirmations natives
+            document.querySelectorAll('.btn-supprimer').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var idPaiement = this.getAttribute('data-id');
+                    if (confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) {
+                        window.location.href = 'supprimer_paiement.php?id=' + idPaiement;
+                    }
+                });
+            });
+            return; // Sortir de la fonction
+        }
+        
+        // Initialisation des variables
+        var modalElement = document.getElementById('confirmationSuppression');
+        var btnConfirmerSuppression = document.getElementById('btnConfirmerSuppression');
+        var idPaiementASupprimer = null;
+        var modalSuppression = null;
+        
+        // Vérification des éléments du DOM
+        console.log('Élément modal:', modalElement ? 'trouvé' : 'non trouvé');
+        console.log('Bouton de confirmation:', btnConfirmerSuppression ? 'trouvé' : 'non trouvé');
+        
+        try {
+            // Initialisation du modal Bootstrap
+            if (modalElement) {
+                modalSuppression = new bootstrap.Modal(modalElement);
+                console.log('Modal Bootstrap initialisé');
+            } else {
+                console.error('L\'élément modal n\'a pas été trouvé dans le DOM');
+            }
+            
+            // Gestion des clics sur les boutons de suppression
+            var boutonsSuppression = document.querySelectorAll('.btn-supprimer');
+            console.log('Nombre de boutons de suppression trouvés:', boutonsSuppression.length);
+            
+            boutonsSuppression.forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    idPaiementASupprimer = this.getAttribute('data-id');
+                    console.log('Bouton cliqué - ID du paiement à supprimer:', idPaiementASupprimer);
+                    
+                    // Afficher le modal de confirmation
+                    if (modalSuppression) {
+                        modalSuppression.show();
+                    } else {
+                        // Fallback si le modal ne peut pas être affiché
+                        if (confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) {
+                            window.location.href = 'supprimer_paiement.php?id=' + idPaiementASupprimer;
+                        }
+                    }
+                });
+            });
+            
+            // Gestion de la confirmation de suppression
+            if (btnConfirmerSuppression) {
+                btnConfirmerSuppression.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Confirmation de suppression - ID:', idPaiementASupprimer);
+                    
+                    if (idPaiementASupprimer) {
+                        console.log('Redirection vers supprimer_paiement.php?id=' + idPaiementASupprimer);
+                        window.location.href = 'supprimer_paiement.php?id=' + idPaiementASupprimer;
+                    } else {
+                        console.error('Aucun ID de paiement défini pour la suppression');
+                        alert('Erreur: Impossible de déterminer le paiement à supprimer.');
+                        
+                        // Fermer le modal s'il est ouvert
+                        if (modalSuppression) {
+                            modalSuppression.hide();
+                        }
+                    }
+                });
+            } else {
+                console.error('Le bouton de confirmation de suppression n\'a pas été trouvé dans le DOM');
+            }
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'initialisation du modal:', error);
+            // Fallback en cas d'erreur
+            document.querySelectorAll('.btn-supprimer').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var idPaiement = this.getAttribute('data-id');
+                    if (confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) {
+                        window.location.href = 'supprimer_paiement.php?id=' + idPaiement;
+                    }
+                });
+            });
+        }
+        
+        console.log('Initialisation de la gestion des suppressions terminée');
+    });
+    </script>
 </body>
 </html>

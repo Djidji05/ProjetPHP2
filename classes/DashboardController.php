@@ -91,8 +91,8 @@ class DashboardController {
             $stmt = $this->db->query($query);
             $stats['paiements_en_retard'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-            // Données pour les graphiques
-            $stats['revenus_12_mois'] = $this->getRevenus12DerniersMois();
+            // Données pour les graphiques (on garde uniquement les dépenses par catégorie et l'occupation)
+            $stats['revenus_mois_courant_data'] = $this->getRevenusMoisCourant();
             $stats['depenses_par_categorie'] = $this->getDepensesParCategorie();
             $stats['occupation_par_immeuble'] = $this->getOccupationParImmeuble();
 
@@ -103,17 +103,126 @@ class DashboardController {
         return $stats;
     }
 
-    // Récupérer les revenus des 12 derniers mois pour le graphique
+    // Récupérer les revenus du mois en cours
+    private function getRevenusMoisCourant() {
+        error_log("Début de getRevenusMoisCourant");
+        
+        // Initialiser le tableau de retour par défaut
+        $resultat = [
+            'labels' => [],
+            'data' => []
+        ];
+        
+        try {
+            // Vérifier que la connexion à la base de données est établie
+            if (!$this->db) {
+                error_log("Erreur: Connexion à la base de données non initialisée");
+                return $resultat;
+            }
+            
+            // Définir les dates de début et de fin du mois en cours
+            $debutMois = new DateTime('first day of this month');
+            $finMois = new DateTime('first day of next month');
+            
+            // Formater les dates pour la requête SQL
+            $debutMoisStr = $debutMois->format('Y-m-d');
+            $finMoisStr = $finMois->format('Y-m-d');
+            
+            error_log("Période de recherche: $debutMoisStr à $finMoisStr");
+            
+            // Requête pour récupérer les paiements du mois en cours
+            $query = "SELECT 
+                        DATE(date_paiement) as jour,
+                        COALESCE(SUM(montant), 0) as total 
+                      FROM paiements 
+                      WHERE date_paiement >= :debut_mois 
+                      AND date_paiement < :fin_mois
+                      AND statut = 'effectue'  // Ne prendre que les paiements effectués
+                      GROUP BY DATE(date_paiement)
+                      ORDER BY jour ASC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([
+                'debut_mois' => $debutMoisStr,
+                'fin_mois' => $finMoisStr
+            ]);
+            
+            $resultats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log("Nombre de jours avec paiements: " . count($resultats));
+            
+            // Initialiser les tableaux pour les données du graphique
+            $labels = [];
+            $data = [];
+            
+            // Créer un tableau pour stocker les totaux par jour
+            $revenusParJour = [];
+            
+            // Initialiser tous les jours du mois à 0
+            $dateCourante = clone $debutMois;
+            while ($dateCourante < $finMois) {
+                $jour = $dateCourante->format('Y-m-d');
+                $label = $dateCourante->format('d/m');
+                $revenusParJour[$jour] = [
+                    'label' => $label,
+                    'valeur' => 0.0
+                ];
+                $dateCourante->modify('+1 day');
+            }
+            
+            // Remplir avec les données de la base de données
+            foreach ($resultats as $ligne) {
+                $jour = $ligne['jour'];
+                if (isset($revenusParJour[$jour])) {
+                    $revenusParJour[$jour]['valeur'] = (float)$ligne['total'];
+                }
+            }
+            
+            // Extraire les labels et les données dans l'ordre chronologique
+            $dateCourante = clone $debutMois;
+            while ($dateCourante < $finMois) {
+                $jour = $dateCourante->format('Y-m-d');
+                if (isset($revenusParJour[$jour])) {
+                    $labels[] = $revenusParJour[$jour]['label'];
+                    $data[] = $revenusParJour[$jour]['valeur'];
+                }
+                $dateCourante->modify('+1 day');
+            }
+            
+            $resultat = [
+                'labels' => $labels,
+                'data' => $data
+            ];
+            
+            error_log("Données du mois courantes: " . json_encode($resultat, JSON_PRETTY_PRINT));
+            
+            return $resultat;
+            
+        } catch (PDOException $e) {
+            error_log("Erreur dans getRevenusMoisCourant: " . $e->getMessage());
+            
+            // En cas d'erreur, retourner des données vides
+            return [
+                'labels' => [],
+                'data' => []
+            ];
+        }
+    }
+    
+    // Ancienne méthode conservée pour référence
     private function getRevenus12DerniersMois() {
+        error_log("Début de getRevenus12DerniersMois");
         try {
             $data = [];
             $labels = [];
             $hasData = false;
             
             // Vérifier si la table paiements existe
+            error_log("Vérification de l'existence de la table paiements");
             $tableExists = $this->db->query("SHOW TABLES LIKE 'paiements'");
+            $tableExistsCount = $tableExists->rowCount();
+            error_log("Table paiements existe: " . ($tableExistsCount > 0 ? 'Oui' : 'Non'));
             
-            if ($tableExists->rowCount() === 0) {
+            if ($tableExistsCount === 0) {
                 // La table n'existe pas, retourner des données vides
                 for ($i = 11; $i >= 0; $i--) {
                     $date = new DateTime();
@@ -132,24 +241,33 @@ class DashboardController {
                 $date = new DateTime();
                 $date->modify("-$i months");
                 $moisAnnee = $date->format('Y-m');
-                $labels[] = $date->format('M Y');
+                $moisLabel = $date->format('M Y');
+                $labels[] = $moisLabel;
                 
                 $debutMois = $date->format('Y-m-01');
                 $finMois = $date->modify('+1 month')->format('Y-m-01');
+                
+                error_log("Traitement du mois: $moisLabel ($debutMois à $finMois)");
                 
                 $query = "SELECT COALESCE(SUM(montant), 0) as total 
                          FROM paiements 
                          WHERE date_paiement >= :debut_mois 
                          AND date_paiement < :fin_mois";
                 $stmt = $this->db->prepare($query);
+                
+                error_log("Requête SQL: " . str_replace([':debut_mois', ':fin_mois'], ["'$debutMois'", "'$finMois'"], $query));
+                
                 $stmt->execute(['debut_mois' => $debutMois, 'fin_mois' => $finMois]);
                 
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 $total = (float)$result['total'];
                 $data[] = $total;
                 
+                error_log("Résultat pour $moisLabel: " . json_encode($result) . " (total: $total)");
+                
                 if ($total > 0) {
                     $hasData = true;
+                    error_log("Données trouvées pour $moisLabel");
                 }
             }
             
@@ -290,7 +408,7 @@ class DashboardController {
                     CONCAT('Paiement de ', FORMAT(p.montant, 2, 'fr_FR'), ' € reçu de ', l.prenom, ' ', l.nom) as description,
                     p.id as reference_id
                  FROM paiements p
-                 JOIN contrats c ON p.id_contrat = c.id
+                 JOIN contrats c ON p.contrat_id = c.id
                  JOIN locataires l ON c.id_locataire= l.id
                  ORDER BY p.date_paiement DESC
                  LIMIT :limit";
@@ -339,7 +457,7 @@ class DashboardController {
                         CONCAT(l.prenom, ' ', l.nom) as locataire,
                         c.id_appartement
                  FROM paiements p
-                 JOIN contrats c ON p.id_contrat = c.id
+                 JOIN contrats c ON p.contrat_id = c.id
                  JOIN locataires l ON c.id_locataire = l.id
                  WHERE p.date_paiement BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
                  AND p.statut = 'paye'

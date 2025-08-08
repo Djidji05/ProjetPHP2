@@ -204,7 +204,7 @@ include 'head.php';
 
                                 <div class="text-center mt-4">
                                     <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
-                                    <a href="fiche_locataire.php?id=<?= $locataireId ?>" class="btn btn-secondary">Annuler</a>
+                                    <a href="gestion_locataires.php" class="btn btn-secondary">Annuler</a>
                                 </div>
                             </form>
                         </div>

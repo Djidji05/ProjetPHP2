@@ -1,8 +1,12 @@
 <?php
-// Vérification de la session
+// Vérification de la session et des droits d'accès
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+// Initialisation des variables de message
+$message_succes = '';
+$message_erreur = '';
 
 // Définition de la racine du site
 define('ROOT_PATH', dirname(dirname(__FILE__)));
@@ -20,21 +24,44 @@ use anacaona\PaiementController;
 $contratController = new ContratController();
 $paiementController = new PaiementController();
 
-// Récupération de la liste des contrats actifs
-$contrats = $contratController->listerContrats(['statut' => 'actif']);
+// Récupération de l'ID du contrat depuis l'URL si présent
+$contrat_id = isset($_GET['contrat_id']) ? intval($_GET['contrat_id']) : 0;
+
+// Récupération de la liste des contrats en cours
+$contrats = $contratController->listerContrats(['statut' => 'en_cours']);
+
+// Si un ID de contrat est fourni, on récupère les détails du contrat
+$contrat_selectionne = null;
+if ($contrat_id > 0) {
+    foreach ($contrats as $contrat) {
+        if ($contrat['id'] == $contrat_id) {
+            $contrat_selectionne = $contrat;
+            break;
+        }
+    }
+}
+
+// Log pour débogage
+error_log("Contrats actifs récupérés : " . print_r($contrats, true));
 
 // Traitement du formulaire
 $erreurs = [];
 $succes = false;
+
+// Récupération et nettoyage des données
 $donnees = [
-    'contrat_id' => $_POST['contrat_id'] ?? '',
-    'montant' => $_POST['montant'] ?? '',
-    'date_paiement' => $_POST['date_paiement'] ?? date('Y-m-d'),
+    'contrat_id' => trim($_POST['contrat_id'] ?? ''),
+    'montant' => str_replace(',', '.', trim($_POST['montant'] ?? '')), // Remplace la virgule par un point
+    'date_paiement' => !empty($_POST['date_paiement']) ? date('Y-m-d', strtotime(str_replace('/', '-', $_POST['date_paiement']))) : date('Y-m-d'),
     'moyen_paiement' => $_POST['moyen_paiement'] ?? 'virement',
-    'reference' => $_POST['reference'] ?? '',
-    'statut' => $_POST['statut'] ?? 'en_attente',
-    'notes' => $_POST['notes'] ?? ''
+    'reference' => trim($_POST['reference'] ?? ''),
+    'statut' => in_array($_POST['statut'] ?? 'en_attente', ['en_attente', 'valide', 'refuse', 'rembourse']) ? ($_POST['statut'] ?? 'en_attente') : 'en_attente',
+    'notes' => trim($_POST['notes'] ?? '')
 ];
+
+// Log des données reçues pour débogage
+error_log("=== DONNEES DU FORMULAIRE ===");
+error_log(print_r($donnees, true));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validation des données
@@ -42,33 +69,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erreurs[] = "Le contrat est obligatoire";
     }
     
-    if (empty($donnees['montant']) || !is_numeric($donnees['montant']) || $donnees['montant'] <= 0) {
-        $erreurs[] = "Le montant doit être un nombre positif";
+    // Validation du montant
+    if (empty($donnees['montant'])) {
+        $erreurs[] = "Le montant est obligatoire";
+    } elseif (!is_numeric($donnees['montant'])) {
+        $erreurs[] = "Le montant doit être un nombre valide";
+    } elseif ($donnees['montant'] <= 0) {
+        $erreurs[] = "Le montant doit être supérieur à zéro";
+    } else {
+        // Formatage du montant avec 2 décimales
+        $donnees['montant'] = number_format((float)$donnees['montant'], 2, '.', '');
     }
     
-    if (empty($donnees['date_paiement'])) {
-        $erreurs[] = "La date de paiement est obligatoire";
+    // Validation de la date
+    if (empty($donnees['date_paiement']) || $donnees['date_paiement'] === '1970-01-01') {
+        $erreurs[] = "La date de paiement est obligatoire et doit être valide";
     }
     
     // Si pas d'erreurs, on enregistre
     if (empty($erreurs)) {
-        $resultat = $paiementController->creerPaiement($donnees);
-        
-        if ($resultat) {
-            $succes = true;
-            // Réinitialisation du formulaire
-            $donnees = [
-                'contrat_id' => '',
-                'montant' => '',
-                'date_paiement' => date('Y-m-d'),
-                'moyen_paiement' => 'virement',
-                'reference' => '',
-                'statut' => 'en_attente',
-                'notes' => ''
-            ];
-        } else {
-            $erreurs[] = "Une erreur est survenue lors de l'enregistrement du paiement";
+        try {
+            error_log("Tentative d'enregistrement du paiement avec les données : " . print_r($donnees, true));
+            
+            // Appel au contrôleur pour créer le paiement
+            $resultat = $paiementController->creerPaiement($donnees);
+            
+            if ($resultat) {
+                $succes = true;
+                // Message de succès et redirection
+                $_SESSION['message_succes'] = "Le paiement a été enregistré avec succès.";
+                
+                // Redirection vers la liste des paiements
+                header('Location: gestion_paiements.php?success=1');
+                exit();
+            } else {
+                throw new Exception("Échec de l'enregistrement du paiement sans erreur spécifique");
+            }
+        } catch (Exception $e) {
+            $errorMessage = "Erreur lors de l'enregistrement : " . $e->getMessage();
+            error_log("ERREUR lors de la création du paiement : " . $errorMessage);
+            $message_erreur = $errorMessage;
+            $_SESSION['message_erreur'] = $errorMessage;
         }
+    } else {
+        $message_erreur = implode("<br>", $erreurs);
+        $_SESSION['message_erreur'] = $message_erreur;
     }
 }
 ?>
@@ -123,31 +168,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <form method="post" class="row g-3">
                                 <div class="col-md-6">
                                     <label for="contrat_id" class="form-label">Contrat <span class="text-danger">*</span></label>
-                                    <select class="form-select" id="contrat_id" name="contrat_id" required>
-                                        <option value="">Sélectionner un contrat</option>
+                                    <select class="form-select" id="contrat_id" name="contrat_id" required <?php echo ($contrat_selectionne) ? 'disabled' : ''; ?>>
+                                        <?php if (!$contrat_selectionne): ?>
+                                            <option value="">Sélectionner un contrat</option>
+                                        <?php endif; ?>
                                         <?php foreach ($contrats as $contrat): ?>
-                                            <option value="<?php echo $contrat['id']; ?>" 
-                                                <?php echo ($donnees['contrat_id'] == $contrat['id']) ? 'selected' : ''; ?>>
-                                                Contrat #<?php echo $contrat['id']; ?> - 
-                                                <?php echo htmlspecialchars($contrat['locataire_nom'] . ' ' . $contrat['locataire_prenom']); ?>
+                                            <option value="<?= $contrat['id'] ?>" 
+                                                <?= (($contrat_selectionne && $contrat['id'] == $contrat_selectionne['id']) || (isset($donnees['contrat_id']) && $donnees['contrat_id'] == $contrat['id'])) ? 'selected' : '' ?>>
+                                                Contrat #<?= $contrat['id'] ?> - <?= htmlspecialchars($contrat['locataire_nom'] ?? '') ?> <?= htmlspecialchars($contrat['locataire_prenom'] ?? '') ?>
                                             </option>
                                         <?php endforeach; ?>
+                                        <?php if ($contrat_selectionne): ?>
+                                            <input type="hidden" name="contrat_id" value="<?= $contrat_selectionne['id'] ?>">
+                                        <?php endif; ?>
                                     </select>
                                 </div>
                                 
                                 <div class="col-md-6">
                                     <label for="montant" class="form-label">Montant (€) <span class="text-danger">*</span></label>
                                     <div class="input-group">
-                                        <input type="number" step="0.01" min="0" class="form-control" id="montant" 
-                                               name="montant" value="<?php echo htmlspecialchars($donnees['montant']); ?>" required>
-                                        <span class="input-group-text">€</span>
+                                        <input type="text" class="form-control" id="montant" 
+                                               name="montant" 
+                                               value="<?php echo !empty($donnees['montant']) ? htmlspecialchars(str_replace('.', ',', $donnees['montant'])) : ''; ?>" 
+                                               pattern="[0-9]+([,][0-9]{1,2})?" 
+                                               title="Veuillez entrer un montant valide (ex: 125,50)" 
+                                               required>
+                                        <span class="input-text">€</span>
                                     </div>
+                                    <div class="form-text">Utilisez une virgule comme séparateur décimal</div>
                                 </div>
                                 
                                 <div class="col-md-6">
                                     <label for="date_paiement" class="form-label">Date de paiement <span class="text-danger">*</span></label>
                                     <input type="date" class="form-control" id="date_paiement" 
-                                           name="date_paiement" value="<?php echo htmlspecialchars($donnees['date_paiement']); ?>" required>
+                                           name="date_paiement" 
+                                           value="<?php echo !empty($donnees['date_paiement']) ? htmlspecialchars($donnees['date_paiement']) : date('Y-m-d'); ?>" 
+                                           required>
                                 </div>
                                 
                                 <div class="col-md-6">

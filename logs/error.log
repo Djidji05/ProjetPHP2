@@ -1,0 +1,39 @@
+[08-Aug-2025 18:36:37 UTC] Contrats actifs récupérés : Array
+(
+    [0] => Array
+        (
+            [id] => 7
+            [id_appartement] => 26
+            [id_locataire] => 4
+            [date_debut] => 2025-08-08
+            [date_fin] => 2026-08-08
+            [loyer] => 2000.00
+            [depot_garantie] => 2000.00
+            [pdf_contrat] => contrat_4_20250808181903.pdf
+            [statut] => en_cours
+            [updated_at] => 2025-08-08 14:22:16
+            [date_fin_reelle] => 
+            [motif_resiliation] => 
+            [commentaires_resiliation] => 
+            [locataire_nom] => Jean
+            [locataire_prenom] => Robert-jean
+            [appartement_numero] => 12
+            [appartement_adresse] => Rue 18 H-I
+            [locataire_complet] => Robert-jean Jean
+            [adresse_complete] => Rue 18 H-I (99410 Cap-Haïtien)
+        )
+
+)
+
+[08-Aug-2025 18:36:37 UTC] === DONNEES DU FORMULAIRE ===
+[08-Aug-2025 18:36:37 UTC] Array
+(
+    [contrat_id] => 
+    [montant] => 
+    [date_paiement] => 2025-08-08
+    [moyen_paiement] => virement
+    [reference] => 
+    [statut] => en_attente
+    [notes] => 
+)
+

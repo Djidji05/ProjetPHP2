@@ -1,11 +1,12 @@
 <?php
-// Vérification de la session
+// Vérification de la session et des droits d'accès
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Vérification des droits d'accès si nécessaire
+// Vérification de l'authentification et des rôles
 require_once '../includes/auth_check.php';
+require_once '../includes/role_check.php';
 
 // Chargement des classes nécessaires
 require_once '../classes/AppartementController.php';
@@ -43,18 +44,8 @@ $proprietaires = $proprietaireController->getAllProprietaires();
     <?php include("header.php"); ?>
     <!-- End Header -->
 
-    <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar">
-        <ul class="sidebar-nav" id="sidebar-nav">
-            <li class="nav-item">
-                <a class="nav-link" href="dashboard.php">
-                    <i class="bi bi-grid"></i>
-                    <span>Tableau de bord</span>
-                </a>
-            </li>
-            <?php include("menu.php"); ?>
-        </ul>
-    </aside>
+    <!-- ======= Sidebar ======= -->
+    <?php include("sidebar.php"); ?>
     <!-- End Sidebar -->
 
     <main id="main" class="main">

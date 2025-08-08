@@ -38,15 +38,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Récupérer le jeton CSRF
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
                 
+                // Créer un objet FormData pour envoyer les données
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                
                 // Envoyer la requête de suppression
                 fetch(`/ANACAONA/api/delete_appartement.php?id=${id}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': csrfToken
                     },
-                    body: `csrf_token=${encodeURIComponent(csrfToken)}`
+                    body: formData
                 })
                 .then(async response => {
                     const contentType = response.headers.get('content-type');
@@ -71,7 +74,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             window.location.reload();
                         });
                     } else {
-                        throw new Error(data.message || 'Erreur lors de la suppression');
+                        // Ne pas lancer d'erreur, mais afficher le message d'erreur de manière appropriée
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: data.message || 'Erreur lors de la suppression',
+                            confirmButtonText: 'OK'
+                        });
+                        return Promise.reject(); // Empêcher l'exécution du bloc catch suivant
                     }
                 })
                 .catch(error => {

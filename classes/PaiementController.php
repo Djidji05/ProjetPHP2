@@ -22,55 +22,95 @@ class PaiementController {
         try {
             $this->db->beginTransaction();
 
+            error_log("=== DEBUT CREATION PAIEMENT ===");
+            error_log("Données reçues: " . print_r($donnees, true));
+
             // Validation des données requises
             $champs_requis = ['contrat_id', 'montant', 'date_paiement', 'moyen_paiement'];
             foreach ($champs_requis as $champ) {
-                if (empty($donnees[$champ])) {
+                if (empty($donnees[$champ]) && $donnees[$champ] !== '0') {
                     throw new \InvalidArgumentException("Le champ $champ est requis");
                 }
             }
+            
+            // Vérifier que le contrat existe
+            $stmt = $this->db->prepare("SELECT id FROM contrats WHERE id = ?");
+            $stmt->execute([$donnees['contrat_id']]);
+            if (!$stmt->fetch()) {
+                throw new \Exception("Le contrat spécifié n'existe pas (ID: " . $donnees['contrat_id'] . ")");
+            }
 
-            // Préparation de la requête
-            $query = "INSERT INTO {$this->table} 
-                     (contrat_id, montant, date_paiement, moyen_paiement, reference, statut, notes)
-                     VALUES (:contrat_id, :montant, :date_paiement, :moyen_paiement, :reference, :statut, :notes)";
-            
-            $stmt = $this->db->prepare($query);
-            
-            // Valeurs par défaut
-            $donnees['statut'] = $donnees['statut'] ?? 'en_attente';
+            // Nettoyage et formatage des données
+            $donnees['montant'] = (float) $donnees['montant'];
+            $donnees['date_paiement'] = date('Y-m-d', strtotime($donnees['date_paiement']));
             $donnees['reference'] = $donnees['reference'] ?? '';
             $donnees['notes'] = $donnees['notes'] ?? '';
             
-            // Exécution
-            $result = $stmt->execute([
-                ':contrat_id' => $donnees['contrat_id'],
+            // Validation du statut
+            $statutsValides = ['en_attente', 'valide', 'refuse', 'rembourse'];
+            $donnees['statut'] = in_array($donnees['statut'] ?? 'en_attente', $statutsValides) 
+                ? $donnees['statut'] 
+                : 'en_attente';
+            
+            // Validation du moyen de paiement
+            $moyensValides = ['virement', 'cheque', 'especes', 'carte_bancaire', 'autre'];
+            $donnees['moyen_paiement'] = in_array($donnees['moyen_paiement'] ?? 'virement', $moyensValides)
+                ? $donnees['moyen_paiement']
+                : 'virement';
+
+            // Construction de la requête
+            $query = "INSERT INTO {$this->table} 
+                     (contrat_id, montant, date_paiement, moyen_paiement, reference, statut, notes, date_creation)
+                     VALUES (:contrat_id, :montant, :date_paiement, :moyen_paiement, :reference, :statut, :notes, NOW())";
+            
+            error_log("Requête SQL: " . $query);
+            
+            $stmt = $this->db->prepare($query);
+            
+            // Exécution avec les paramètres nommés
+            $params = [
+                ':contrat_id' => (int) $donnees['contrat_id'],
                 ':montant' => $donnees['montant'],
                 ':date_paiement' => $donnees['date_paiement'],
                 ':moyen_paiement' => $donnees['moyen_paiement'],
                 ':reference' => $donnees['reference'],
                 ':statut' => $donnees['statut'],
                 ':notes' => $donnees['notes']
-            ]);
+            ];
+            
+            error_log("Paramètres: " . print_r($params, true));
+            
+            $result = $stmt->execute($params);
 
             if (!$result) {
-                throw new \Exception("Erreur lors de la création du paiement");
+                $errorInfo = $stmt->errorInfo();
+                $errorMessage = "Erreur SQL [" . $errorInfo[0] . "]: " . ($errorInfo[2] ?? 'Erreur inconnue');
+                error_log("Erreur PaiementController: " . $errorMessage);
+                error_log("Code erreur: " . $errorInfo[1]);
+                error_log("Requête: " . $query);
+                error_log("Données: " . print_r($donnees, true));
+                throw new \Exception($errorMessage);
             }
 
             $paiementId = $this->db->lastInsertId();
+            error_log("Paiement créé avec succès. ID: " . $paiementId);
+            
             $this->db->commit();
             
             // Mise à jour du statut du contrat si nécessaire
-            $this->mettreAJourStatutContrat($donnees['contrat_id']);
+            if (method_exists($this, 'mettreAJourStatutContrat')) {
+                $this->mettreAJourStatutContrat($donnees['contrat_id']);
+            }
             
             return ['id' => $paiementId];
             
         } catch (\Exception $e) {
-            if ($this->db->inTransaction()) {
+            if (isset($this->db) && $this->db->inTransaction()) {
                 $this->db->rollBack();
             }
-            error_log("Erreur création paiement: " . $e->getMessage());
-            return false;
+            error_log("ERREUR dans creerPaiement: " . $e->getMessage());
+            error_log("Trace: " . $e->getTraceAsString());
+            throw $e; // Renvoyer l'exception pour affichage à l'utilisateur
         }
     }
 
@@ -96,13 +136,15 @@ class PaiementController {
      */
     public function listerPaiements($filtres = []) {
         try {
-            $query = "SELECT p.*, c.reference as contrat_reference, 
-                             l.nom as locataire_nom, l.prenom as locataire_prenom,
+            $query = "SELECT p.*, 
+                             CONCAT('Contrat #', c.id) as contrat_reference,
+                             l.nom as locataire_nom, 
+                             l.prenom as locataire_prenom,
                              a.adresse as appartement_adresse
                       FROM {$this->table} p
                       JOIN contrats c ON p.contrat_id = c.id
-                      JOIN locataires l ON c.locataire_id = l.id
-                      JOIN appartements a ON c.appartement_id = a.id
+                      JOIN locataires l ON c.id_locataire = l.id
+                      JOIN appartements a ON c.id_appartement = a.id
                       WHERE 1=1";
             
             $params = [];
@@ -199,7 +241,36 @@ class PaiementController {
     }
     
     /**
+     * Met à jour le statut d'un contrat en fonction des paiements
+     */
+    private function mettreAJourStatutContrat($contratId) {
+        try {
+            // Récupération du solde actuel du contrat
+            $solde = $this->calculerSoldeContrat($contratId);
+            
+            // Détermination du nouveau statut
+            $nouveauStatut = ($solde['solde'] <= 0) ? 'a_jour' : 'en_retard';
+            
+            // Mise à jour du statut du contrat
+            $query = "UPDATE contrats SET statut = :statut WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([
+                ':statut' => $nouveauStatut,
+                ':id' => $contratId
+            ]);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            error_log("Erreur mise à jour statut contrat: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Supprime un paiement
+     * @param int $id ID du paiement à supprimer
+     * @return bool True si la suppression a réussi, false sinon
      */
     public function supprimerPaiement($id) {
         try {
@@ -208,7 +279,7 @@ class PaiementController {
             // Récupération des infos avant suppression
             $paiement = $this->getPaiement($id);
             if (!$paiement) {
-                throw new \Exception("Paiement introuvable");
+                throw new \Exception("Paiement introuvable (ID: $id)");
             }
             
             $query = "DELETE FROM {$this->table} WHERE id = :id";
@@ -216,13 +287,16 @@ class PaiementController {
             $result = $stmt->execute([':id' => $id]);
             
             if (!$result) {
-                throw new \Exception("Échec de la suppression du paiement");
+                $errorInfo = $stmt->errorInfo();
+                throw new \Exception("Erreur lors de la suppression du paiement: " . ($errorInfo[2] ?? 'Erreur inconnue'));
             }
             
             $this->db->commit();
             
             // Mise à jour du statut du contrat
-            $this->mettreAJourStatutContrat($paiement['contrat_id']);
+            if (isset($paiement['contrat_id'])) {
+                $this->mettreAJourStatutContrat($paiement['contrat_id']);
+            }
             
             return true;
             
@@ -230,23 +304,42 @@ class PaiementController {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
             }
-            error_log("Erreur suppression paiement: " . $e->getMessage());
+            error_log("Erreur lors de la suppression du paiement #$id: " . $e->getMessage());
             return false;
         }
     }
     
     /**
-     * Met à jour le statut d'un contrat en fonction des paiements
+     * Récupère tous les paiements d'un contrat spécifique
+     * @param int $contratId ID du contrat
+     * @return array Tableau des paiements du contrat
      */
-    private function mettreAJourStatutContrat($contratId) {
+    public function getPaiementsParContrat($contratId) {
         try {
-            // Logique pour mettre à jour le statut du contrat
-            // Par exemple, marquer comme "en_retard" si des paiements sont en retard
+            $query = "SELECT p.*, 
+                             DATE_FORMAT(p.date_paiement, '%d/%m/%Y') as date_paiement_format,
+                             DATE_FORMAT(p.date_paiement, '%M %Y') as mois_annee,
+                             CASE 
+                                 WHEN p.statut = 'valide' THEN 'Payé'
+                                 WHEN p.statut = 'en_attente' THEN 'En attente'
+                                 WHEN p.statut = 'refuse' THEN 'Refusé'
+                                 WHEN p.statut = 'rembourse' THEN 'Remboursé'
+                                 ELSE p.statut
+                             END as statut_libelle,
+                             c.reference as contrat_reference
+                      FROM {$this->table} p
+                      JOIN contrats c ON p.contrat_id = c.id
+                      WHERE p.contrat_id = :contrat_id
+                      ORDER BY p.date_paiement DESC, p.id DESC";
             
-            // Cette méthode peut être étendue selon les besoins métier
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([':contrat_id' => $contratId]);
+            
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
             
         } catch (\Exception $e) {
-            error_log("Erreur mise à jour statut contrat: " . $e->getMessage());
+            error_log("Erreur récupération des paiements du contrat #$contratId: " . $e->getMessage());
+            return [];
         }
     }
     

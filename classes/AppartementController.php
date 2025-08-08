@@ -48,6 +48,65 @@ class AppartementController {
     }
     
     /**
+     * Récupère la liste des appartements disponibles à la location
+     * 
+     * @return array La liste des appartements disponibles avec les informations du propriétaire
+     */
+    public function getAppartementsDisponibles() {
+        try {
+            // Journalisation pour le débogage
+            error_log("Début de getAppartementsDisponibles()");
+            
+            // Requête pour obtenir les appartements disponibles avec plus d'informations
+            $query = "SELECT 
+                        a.id, 
+                        a.numero, 
+                        a.adresse, 
+                        a.ville, 
+                        a.code_postal,
+                        a.loyer,
+                        a.surface,
+                        a.pieces as nb_pieces,
+                        a.statut,
+                        p.nom as proprietaire_nom,
+                        p.prenom as proprietaire_prenom,
+                        CONCAT(a.adresse, ', ', a.code_postal, ' ', a.ville) as adresse_complete
+                      FROM 
+                        appartements a
+                      LEFT JOIN 
+                        proprietaires p ON a.id_proprietaire = p.id
+                      WHERE 
+                        a.id NOT IN (
+                            SELECT DISTINCT id_appartement 
+                            FROM contrats 
+                            WHERE (date_fin > CURDATE() OR date_fin IS NULL)
+                            AND statut = 'en_cours'
+                        )
+                        AND (a.statut = 'libre' OR a.statut IS NULL)
+                      ORDER BY 
+                        a.ville, a.code_postal, a.numero";
+            
+            // Journalisation de la requête
+            error_log("Requête SQL : " . $query);
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute();
+            
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Journalisation des résultats
+            error_log("Nombre d'appartements disponibles : " . count($result));
+            
+            return $result;
+            
+        } catch (PDOException $e) {
+            $errorMsg = "Erreur lors de la récupération des appartements disponibles: " . $e->getMessage();
+            error_log($errorMsg);
+            return [];
+        }
+    }
+    
+    /**
      * Récupère tous les appartements (méthode de compatibilité)
      * 
      * @deprecated Utiliser listerAppartements() à la place
@@ -199,6 +258,7 @@ class AppartementController {
         try {
             $query = "SELECT COUNT(*) as count FROM contrats 
                      WHERE id_appartement = :appartement_id 
+                     AND statut = 'en_cours'
                      AND (date_fin IS NULL OR date_fin >= CURDATE())";
             
             $stmt = $this->db->prepare($query);
@@ -219,36 +279,64 @@ class AppartementController {
      * Supprime un appartement et ses photos associées
      * 
      * @param int $appartementId L'ID de l'appartement à supprimer
-     * @return bool True si la suppression a réussi, false sinon
+     * @return bool|string True si la suppression a réussi, false en cas d'erreur, ou un message d'erreur
      */
     public function deleteAppartement($appartementId) {
+        error_log("Tentative de suppression de l'appartement #$appartementId");
+        
         try {
-            $this->db->beginTransaction();
-            
-            // 1. Supprimer les photos de l'appartement
-            $queryDeletePhotos = "DELETE FROM photos_appartement WHERE appartement_id = :appartement_id";
-            $stmtPhotos = $this->db->prepare($queryDeletePhotos);
-            $stmtPhotos->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
-            $stmtPhotos->execute();
-            
-            // 2. Supprimer l'appartement
-            $queryDeleteAppartement = "DELETE FROM appartements WHERE id = :id";
-            $stmtAppartement = $this->db->prepare($queryDeleteAppartement);
-            $stmtAppartement->bindParam(':id', $appartementId, PDO::PARAM_INT);
-            $result = $stmtAppartement->execute();
-            
-            if ($result) {
-                $this->db->commit();
-                return true;
-            } else {
-                $this->db->rollBack();
-                return false;
+            // Vérifier d'abord s'il y a des contrats actifs
+            error_log("Vérification des contrats actifs pour l'appartement #$appartementId");
+            if ($this->checkAppartementHasActiveContracts($appartementId)) {
+                $message = "Impossible de supprimer l'appartement car il a des contrats actifs";
+                error_log($message);
+                return $message;
             }
             
-        } catch (PDOException $e) {
-            $this->db->rollBack();
-            error_log("Erreur lors de la suppression de l'appartement: " . $e->getMessage());
-            return false;
+            error_log("Début de la transaction pour la suppression de l'appartement #$appartementId");
+            $this->db->beginTransaction();
+            
+            try {
+                // 1. Supprimer les photos de l'appartement
+                error_log("Suppression des photos de l'appartement #$appartementId");
+                $queryDeletePhotos = "DELETE FROM photos_appartement WHERE appartement_id = :appartement_id";
+                $stmtPhotos = $this->db->prepare($queryDeletePhotos);
+                $stmtPhotos->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+                $photosDeleted = $stmtPhotos->execute();
+                error_log("Photos supprimées : " . ($photosDeleted ? 'oui' : 'non') . ", lignes affectées : " . $stmtPhotos->rowCount());
+                
+                // 2. Supprimer l'appartement
+                error_log("Suppression de l'appartement #$appartementId");
+                $queryDeleteAppartement = "DELETE FROM appartements WHERE id = :id";
+                $stmtAppartement = $this->db->prepare($queryDeleteAppartement);
+                $stmtAppartement->bindParam(':id', $appartementId, PDO::PARAM_INT);
+                $result = $stmtAppartement->execute();
+                $rowsAffected = $stmtAppartement->rowCount();
+                error_log("Résultat de la suppression : " . ($result ? 'succès' : 'échec') . ", lignes affectées : $rowsAffected");
+                
+                if ($result && $rowsAffected > 0) {
+                    $this->db->commit();
+                    error_log("Transaction validée avec succès pour l'appartement #$appartementId");
+                    return true;
+                } else {
+                    $this->db->rollBack();
+                    $errorInfo = $stmtAppartement->errorInfo();
+                    $errorMessage = "Erreur lors de la suppression de l'appartement. Code erreur: " . ($errorInfo[0] ?? 'inconnu') . ", Message: " . ($errorInfo[2] ?? 'aucun détail');
+                    error_log($errorMessage);
+                    return $errorMessage;
+                }
+                
+            } catch (PDOException $e) {
+                $this->db->rollBack();
+                error_log("Erreur PDO lors de la suppression de l'appartement #$appartementId: " . $e->getMessage());
+                error_log("Trace de l'erreur : " . $e->getTraceAsString());
+                return "Erreur technique lors de la suppression : " . $e->getMessage();
+            }
+            
+        } catch (Exception $e) {
+            error_log("Erreur générale lors de la suppression de l'appartement #$appartementId: " . $e->getMessage());
+            error_log("Trace de l'erreur : " . $e->getTraceAsString());
+            return "Une erreur inattendue est survenue : " . $e->getMessage();
         }
     }
     
@@ -386,62 +474,6 @@ class AppartementController {
             
             // Propagation de l'exception avec un message clair
             throw new Exception("Impossible d'ajouter l'appartement : " . $e->getMessage());
-        }
-    }
-    public function getAppartementsDisponibles() {
-        try {
-            // Journalisation pour le débogage
-            error_log("Début de getAppartementsDisponibles()");
-            
-            // Requête pour obtenir les appartements disponibles avec plus d'informations
-            $query = "SELECT 
-                        a.id, 
-                        a.numero, 
-                        a.adresse, 
-                        a.ville, 
-                        a.code_postal,
-                        a.loyer,
-                        a.surface,
-                        a.nb_pieces,
-                        a.statut,
-                        p.nom as proprietaire_nom,
-                        p.prenom as proprietaire_prenom
-                      FROM 
-                        appartements a
-                      LEFT JOIN 
-                        proprietaires p ON a.proprietaire_id = p.id
-                      WHERE 
-                        a.statut = 'libre' 
-                      ORDER BY 
-                        a.ville, a.code_postal, a.numero";
-            
-            // Journalisation de la requête
-            error_log("Exécution de la requête: " . $query);
-            
-            $stmt = $this->db->prepare($query);
-            $stmt->execute();
-            
-            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            error_log("Nombre d'appartements disponibles trouvés: " . count($result));
-            
-            return $result;
-            
-        } catch (PDOException $e) {
-            $errorMessage = "Erreur PDO dans getAppartementsDisponibles: " . $e->getMessage() . 
-                          " (Code: " . $e->getCode() . ")";
-            error_log($errorMessage);
-            
-            // En cas d'erreur, essayer de récupérer une version minimale des données
-            try {
-                $fallbackQuery = "SELECT id, numero, statut FROM appartements LIMIT 10";
-                $stmt = $this->db->query($fallbackQuery);
-                return $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-            } catch (Exception $ex) {
-                error_log("Échec de la récupération de secours: " . $ex->getMessage());
-                return [];
-            }
         }
     }
     

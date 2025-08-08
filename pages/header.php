@@ -13,10 +13,10 @@
 
         <!-- Barre de recherche -->
         <div class="search-container">
-            <form class="search-form" method="POST" action="#">
+            <form class="search-form" method="GET" action="recherche.php">
                 <div class="input-group">
-                    <input type="text" name="query" placeholder="Rechercher..." class="form-control">
-                    <button type="submit" class="btn">
+                    <input type="text" name="q" placeholder="Rechercher locataires, propriétaires, adresses..." class="form-control" required>
+                    <button type="submit" class="btn btn-primary">
                         <i class="bi bi-search"></i>
                     </button>
                 </div>
@@ -29,7 +29,15 @@
                 <li class="nav-item dropdown">
                     <a class="nav-profile" href="#" data-bs-toggle="dropdown">
                         <span class="user-name">
-                            <?php echo isset($_SESSION['user_nom']) ? htmlspecialchars($_SESSION['user_nom']) : 'Admin'; ?>
+                            <?php 
+                            if (isset($_SESSION['username'])) {
+                                echo htmlspecialchars(ucfirst($_SESSION['username']));
+                            } elseif (isset($_SESSION['role'])) {
+                                echo ucfirst(htmlspecialchars($_SESSION['role']));
+                            } else {
+                                echo 'Utilisateur';
+                            }
+                            ?>
                         </span>
                         <i class="bi bi-chevron-down"></i>
                     </a>

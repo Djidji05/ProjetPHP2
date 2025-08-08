@@ -49,18 +49,9 @@ if (isset($_GET['delete'])) {
 <!-- Header -->
 <?php include("../pages/header.php"); ?>
 
-<!-- Sidebar -->
-<aside id="sidebar" class="sidebar">
-    <ul class="sidebar-nav" id="sidebar-nav">
-        <li class="nav-item">
-            <a class="nav-link collapsed" href="dashboard.php">
-                <i class="bi bi-grid"></i>
-                <span>Tableau de bord</span>
-            </a>
-        </li>
-        <?php include("../pages/menu.php"); ?>
-    </ul>
-</aside>
+<!-- ======= Sidebar ======= -->
+<?php include("sidebar.php"); ?>
+<!-- End Sidebar -->
 
 <!-- Main Content -->
 <main id="main" class="main">

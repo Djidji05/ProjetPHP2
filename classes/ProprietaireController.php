@@ -113,27 +113,76 @@ class ProprietaireController {
         }
     }
 
-    public function modifierProprietaire($id, $donnees) {
+    public function modifierProprietaire($donnees) {
         try {
+            if (!isset($donnees['id'])) {
+                throw new Exception("ID du propriétaire manquant");
+            }
+
+            $id = $donnees['id'];
+            
+            // Vérifier si le propriétaire existe
+            $proprietaire = $this->getProprietaire($id);
+            if (!$proprietaire) {
+                throw new Exception("Le propriétaire demandé n'existe pas");
+            }
+            
+            // Préparation de la requête avec tous les champs
             $query = "UPDATE proprietaires SET 
-                      nom = :nom, 
-                      prenom = :prenom, 
-                      email = :email, 
-                      telephone = :telephone, 
-                      adresse = :adresse 
-                      WHERE id = :id";
+                     civilite = :civilite,
+                     nom = :nom, 
+                     prenom = :prenom, 
+                     email = :email, 
+                     telephone = :telephone, 
+                     adresse = :adresse,
+                     code_postal = :code_postal,
+                     ville = :ville,
+                     pays = :pays,
+                     date_naissance = :date_naissance,
+                     lieu_naissance = :lieu_naissance,
+                     nationalite = :nationalite,
+                     piece_identite = :piece_identite,
+                     numero_identite = :numero_identite
+                     WHERE id = :id";
+            
             $stmt = $this->db->prepare($query);
-            return $stmt->execute([
+            
+            // Conversion de la date de naissance au format YYYY-MM-DD si fournie
+            $dateNaissance = !empty($donnees['date_naissance']) ? date('Y-m-d', strtotime($donnees['date_naissance'])) : null;
+            
+            $params = [
                 ':id' => $id,
+                ':civilite' => $donnees['civilite'] ?? 'M.',
                 ':nom' => $donnees['nom'],
                 ':prenom' => $donnees['prenom'],
-                ':email' => $donnees['email'],
-                ':telephone' => $donnees['telephone'],
-                ':adresse' => $donnees['adresse']
-            ]);
+                ':email' => $donnees['email'] ?? null,
+                ':telephone' => $donnees['telephone'] ?? null,
+                ':adresse' => $donnees['adresse'] ?? null,
+                ':code_postal' => $donnees['code_postal'] ?? null,
+                ':ville' => $donnees['ville'] ?? null,
+                ':pays' => $donnees['pays'] ?? 'France',
+                ':date_naissance' => $dateNaissance,
+                ':lieu_naissance' => $donnees['lieu_naissance'] ?? null,
+                ':nationalite' => $donnees['nationalite'] ?? null,
+                ':piece_identite' => $donnees['piece_identite'] ?? null,
+                ':numero_identite' => $donnees['numero_identite'] ?? null
+            ];
+            
+            $result = $stmt->execute($params);
+            
+            if (!$result) {
+                $error = $stmt->errorInfo();
+                throw new Exception("Erreur lors de la mise à jour du propriétaire: " . ($error[2] ?? 'Erreur inconnue'));
+            }
+            
+            return $result;
+            
         } catch (PDOException $e) {
-            error_log("Erreur modification propriétaire: " . $e->getMessage());
-            return false;
+            error_log("Erreur PDO lors de la modification du propriétaire: " . $e->getMessage());
+            throw new Exception("Erreur lors de la mise à jour des informations du propriétaire");
+        } catch (Exception $e) {
+            error_log("Erreur lors de la modification du propriétaire: " . $e->getMessage());
+            throw $e;
         }
     }
 

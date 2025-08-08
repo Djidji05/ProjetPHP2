@@ -40,10 +40,22 @@
         }
     </style>
 </head>
+<?php
+// Démarrer la session si ce n'est pas déjà fait
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Récupérer le message d'erreur s'il existe
+$error_message = $_SESSION['error_message'] ?? 'Désolé, vous n\'avez pas les autorisations nécessaires pour accéder à cette page.';
+
+// Effacer le message d'erreur après l'avoir affiché
+unset($_SESSION['error_message']);
+?>
 <body>
     <div class="error-container">
         <h1>Accès refusé</h1>
-        <p>Désolé, vous n'avez pas les autorisations nécessaires pour accéder à cette page.</p>
+        <p><?= htmlspecialchars($error_message) ?></p>
         <a href="dashboard.php" class="btn">Retour au tableau de bord</a>
         <a href="login.php?logout" class="btn" style="background-color: #f44336;">Se connecter avec un autre compte</a>
     </div>

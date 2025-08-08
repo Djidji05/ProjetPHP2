@@ -62,10 +62,14 @@ try {
     // Supprimer l'appartement
     $result = $appartementController->deleteAppartement($appartementId);
     
-    if ($result) {
+    if ($result === true) {
         sendJsonResponse(true, 'Appartement supprimé avec succès.');
+    } else if (is_string($result)) {
+        // Si un message d'erreur est retourné
+        sendJsonResponse(false, $result, 400);
     } else {
-        throw new Exception('Une erreur est survenue lors de la suppression de l\'appartement');
+        // En cas d'échec sans message spécifique
+        sendJsonResponse(false, 'Une erreur est survenue lors de la suppression de l\'appartement', 500);
     }
     
 } catch (Exception $e) {

@@ -54,7 +54,9 @@ class Utilisateur {
             extract($_POST);
             if(!empty($nom) && !empty($prenom) && !empty($email) && !empty($sexe) && !empty($nomutilisateur) && !empty($motdepasse))
             {
-                $role = $role ?? 'user'; // Valeur par défaut 'user' si le rôle n'est pas défini
+                // Validation du sexe
+                $sexe_valide = in_array($sexe, ['H', 'F', 'Autre']) ? $sexe : 'Autre';
+                $role = $role ?? 'gestionnaire'; // Valeur par défaut 'gestionnaire' si le rôle n'est pas défini
 
                 $requete = Database::connect()->prepare("
                     INSERT INTO utilisateurs(nom, prenom, email, sexe, nomutilisateur, motdepasse, role) 
@@ -65,25 +67,31 @@ class Utilisateur {
                     ':nom' => $nom,
                     ':prenom' => $prenom,
                     ':email' => $email,
-                    ':sexe' => $sexe,
+                    ':sexe' => $sexe_valide,
                     ':nomutilisateur' => $nomutilisateur,
                     ':motdepasse' => $motdepasse, // Stockage en clair
                     ':role' => $role
                 ]);
 
-            if($resultat) {
-                echo "<p class='alert alert-success'>Enregistrement réussi !</p>";
-                // Redirection après 2 secondes
-                echo "<meta http-equiv='refresh' content='2;url=ajouter_utilisateur.php'>";
-            } else {
-                echo "<p class='alert alert-danger'>Une erreur est survenue lors de l'enregistrement.</p>";
+                if($resultat) {
+                    $_SESSION['message'] = "<p class='alert alert-success'>Utilisateur enregistré avec succès !</p>";
+                    // Redirection immédiate pour éviter la soumission multiple
+                    header('Location: gestion_utilisateurs.php?success=utilisateur_ajoute');
+                    exit();
+                } else {
+                    $message = "<p class='alert alert-danger'>Une erreur est survenue lors de l'enregistrement.</p>";
+                }
             }
+            else 
+            {
+                $message = "<p class='alert alert-danger'>Tous les champs obligatoires doivent être remplis !</p>";
+            }
+            
+            // Stocker le message dans la session pour qu'il persiste après la redirection
+            $_SESSION['message'] = $message;
+            header('Location: ajouter_utilisateur.php');
+            exit();
         }
-        else 
-        {
-            echo "<p class='alert alert-danger'>Tous les champs sont requis !</p>";
-        }
-    }
 }
     // Connexion simplifiée sans hachage
     public function login($username, $password) {
@@ -122,8 +130,44 @@ class Utilisateur {
 
     // Modifier utilisateur
     public function modifier($id, $nom, $prenom, $email, $sexe, $nomutilisateur, $role) {
-        $sql = "UPDATE utilisateurs SET nom = :nom, prenom = :prenom, email = :email, 
-                sexe = :sexe, nomutilisateur = :nomutilisateur, role = :role WHERE id = :id";
+        // Validation du sexe
+        $sexe_valide = in_array($sexe, ['H', 'F', 'Autre']) ? $sexe : 'Autre';
+        
+        $sql = "UPDATE utilisateurs SET 
+                nom = :nom, 
+                prenom = :prenom, 
+                email = :email, 
+                sexe = :sexe, 
+                nomutilisateur = :nomutilisateur, 
+                role = :role 
+                WHERE id = :id";
+                
+        $stmt = $this->pdo->prepare($sql);
+        return $stmt->execute([
+            'id' => $id,
+            'nom' => $nom,
+            'prenom' => $prenom,
+            'email' => $email,
+            'sexe' => $sexe_valide,
+            'nomutilisateur' => $nomutilisateur,
+            'role' => $role
+        ]);
+    }
+    
+    // Modifier utilisateur avec mot de passe
+    public function modifierAvecMotDePasse($id, $nom, $prenom, $email, $sexe, $nomutilisateur, $role, $motdepasse) {
+        // Validation du sexe
+        $sexe_valide = in_array($sexe, ['H', 'F', 'Autre']) ? $sexe : 'Autre';
+        $sql = "UPDATE utilisateurs SET 
+                    nom = :nom, 
+                    prenom = :prenom, 
+                    email = :email, 
+                    sexe = :sexe, 
+                    nomutilisateur = :nomutilisateur, 
+                    role = :role,
+                    motdepasse = :motdepasse 
+                WHERE id = :id";
+                
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([
             'id' => $id,
@@ -132,7 +176,8 @@ class Utilisateur {
             'email' => $email,
             'sexe' => $sexe,
             'nomutilisateur' => $nomutilisateur,
-            'role' => $role
+            'role' => $role,
+            'motdepasse' => $motdepasse
         ]);
     }
 

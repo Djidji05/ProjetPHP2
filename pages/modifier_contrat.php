@@ -119,19 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php include("header.php"); ?>
     <!-- End Header -->
 
-    <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar">
-        <ul class="sidebar-nav" id="sidebar-nav">
-            <li class="nav-item">
-                <a class="nav-link" href="dashboard.php">
-                    <i class="bi bi-grid"></i>
-                    <span>Tableau de bord</span>
-                </a>
-            </li>
-            <?php include("menu.php"); ?>
-        </ul>
-    </aside>
-    <!-- End Sidebar-->
+    <!-- ======= Sidebar ======= -->
+    <?php include("sidebar.php"); ?>
+    <!-- End Sidebar -->
 
     <main id="main" class="main">
         <div class="pagetitle">
@@ -248,8 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
 
                                 <div class="d-flex justify-content-between mt-4">
-                                    <a href="voir_contrat.php?id=<?= $contratId ?>" class="btn btn-secondary">
-                                        <i class="bi bi-arrow-left me-1"></i> Retour
+                                    <a href="gestion_contrats.php" class="btn btn-secondary">
+                                        <i class="bi bi-arrow-left me-1"></i> Retour à la liste
                                     </a>
                                     <button type="submit" class="btn btn-primary">
                                         <i class="bi bi-check-circle me-1"></i> Enregistrer les modifications

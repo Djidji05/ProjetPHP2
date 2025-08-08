@@ -6,36 +6,65 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../classes/Database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
+require_once __DIR__ . '/../classes/ContratController.php';
+require_once __DIR__ . '/../classes/AppartementController.php';
+require_once __DIR__ . '/../classes/LocataireController.php';
 
 use anacaona\Database;
+use anacaona\ContratController;
+use anacaona\AppartementController;
+use anacaona\LocataireController;
 
-// Initialiser la connexion à la base de données
-$pdo = Database::connect();
+/**
+ * Calcule la durée en mois entre deux dates
+ * 
+ * @param string $dateDebut Date de début au format Y-m-d
+ * @param string $dateFin Date de fin au format Y-m-d
+ * @return int Nombre de mois entre les deux dates
+ */
+function calculerDureeMois($dateDebut, $dateFin) {
+    $debut = new DateTime($dateDebut);
+    $fin = new DateTime($dateFin);
+    $interval = $debut->diff($fin);
+    return ($interval->y * 12) + $interval->m + ($interval->d > 0 ? 1 : 0);
+}
 
-// Récupérer les appartements disponibles (non liés à un contrat actif)
-$query = "SELECT a.id, a.numero, a.adresse, a.ville, a.code_postal, a.loyer,
-                 p.nom as proprietaire_nom, p.prenom as proprietaire_prenom 
-          FROM appartements a 
-          LEFT JOIN proprietaires p ON a.proprietaire_id = p.id
-          WHERE a.id NOT IN (
-              SELECT id_appartement 
-              FROM contrats 
-              WHERE date_fin > CURDATE() OR date_fin IS NULL
-          )
-          ORDER BY a.ville, a.code_postal, a.numero";
-$appartements = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
+/**
+ * Récupère l'ID du propriétaire d'un appartement
+ * 
+ * @param int $appartementId ID de l'appartement
+ * @return int ID du propriétaire
+ */
+function getProprietaireIdFromAppartement($appartementId) {
+    $db = Database::connect();
+    $stmt = $db->prepare("SELECT id_proprietaire FROM appartements WHERE id = ?");
+    $stmt->execute([$appartementId]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? (int)$result['id_proprietaire'] : 1; // Retourne 1 par défaut si non trouvé
+}
 
-// Récupérer tous les locataires actifs (sans contrat actif ou avec un contrat expiré)
-$locataires = $pdo->query("
-    SELECT l.* 
-    FROM locataires l
-    WHERE l.id NOT IN (
-        SELECT id_locataire 
-        FROM contrats 
-        WHERE date_fin > CURDATE() OR date_fin IS NULL
-    )
-    ORDER BY l.nom, l.prenom
-")->fetchAll(PDO::FETCH_ASSOC);
+// Initialisation des contrôleurs
+$contratController = new ContratController();
+$appartementController = new AppartementController();
+$locataireController = new LocataireController();
+
+// Récupérer les appartements disponibles via le contrôleur
+$appartements = $appartementController->getAppartementsDisponibles();
+
+// Journalisation pour le débogage
+error_log("Nombre d'appartements disponibles : " . count($appartements));
+if (empty($appartements)) {
+    error_log("Aucun appartement disponible trouvé. Vérifiez la méthode getAppartementsDisponibles() dans AppartementController.php");
+}
+
+// Récupérer les locataires disponibles via le contrôleur
+$locataires = $locataireController->getLocatairesSansContratActif();
+
+// Journalisation pour le débogage
+error_log("Nombre de locataires disponibles : " . count($locataires));
+if (empty($locataires)) {
+    error_log("Aucun locataire disponible trouvé. Vérifiez la méthode getLocatairesSansContratActif() dans LocataireController.php");
+}
 
 $message = '';
 $message_type = '';
@@ -43,36 +72,55 @@ $message_type = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         // Valider et traiter les données du formulaire
-        $id_appartement = $_POST['id_appartement'];
-        $id_locataire = $_POST['id_locataire'];
-        $date_debut = $_POST['date_debut'];
-        $date_fin = $_POST['date_fin'];
-        $loyer = $_POST['loyer'];
-        $depot_garantie = $_POST['depot_garantie'];
+        $donnees = [
+            'appartement_id' => $_POST['id_appartement'],
+            'locataire_id' => $_POST['id_locataire'],
+            'date_debut' => $_POST['date_debut'],
+            'date_fin' => $_POST['date_fin'],
+            'loyer_mensuel' => $_POST['loyer'],
+            'depot_garantie' => $_POST['depot_garantie'],
+            'duree_mois' => calculerDureeMois($_POST['date_debut'], $_POST['date_fin']),
+            'date_signature' => date('Y-m-d'),
+            'date_effet' => $_POST['date_debut'],
+            'statut' => 'en_cours',
+            'conditions_particulieres' => 'Créé via le formulaire web',
+            'proprietaire_id' => getProprietaireIdFromAppartement($_POST['id_appartement'])
+        ];
         
-        // Insérer le contrat
-        $stmt = $pdo->prepare("INSERT INTO contrats 
-                              (id_appartement, id_locataire, date_debut, date_fin, loyer, depot_garantie) 
-                              VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$id_appartement, $id_locataire, $date_debut, $date_fin, $loyer, $depot_garantie]);
+        // Valider les données requises
+        if (empty($donnees['appartement_id']) || empty($donnees['locataire_id']) || 
+            empty($donnees['date_debut']) || empty($donnees['date_fin']) || 
+            empty($donnees['loyer_mensuel'])) {
+            throw new Exception("Tous les champs obligatoires doivent être remplis");
+        }
         
-        // Générer un nom de fichier pour le PDF du contrat
-        $pdf_filename = 'contrat_' . $id_locataire . '_' . date('YmdHis') . '.pdf';
+        // Utiliser le contrôleur pour ajouter le contrat
+        $contratId = $contratController->ajouterContrat($donnees);
         
-        // Mettre à jour le contrat avec le nom du fichier PDF
-        $stmt = $pdo->prepare("UPDATE contrats SET pdf_contrat = ? WHERE id = ?");
-        $stmt->execute([$pdf_filename, $pdo->lastInsertId()]);
-        
-        // Message de succès
-        $message = 'Contrat créé avec succès ! Un fichier PDF sera généré prochainement.';
-        $message_type = 'success';
-        
-        // Redirection après succès
-        header('Location: gestion_contrats.php?success=1');
-        exit;
-    } catch (PDOException $e) {
+        if ($contratId) {
+            // Générer un nom de fichier pour le PDF du contrat
+            $pdf_filename = 'contrat_' . $donnees['locataire_id'] . '_' . date('YmdHis') . '.pdf';
+            
+            // Mettre à jour le contrat avec le nom du fichier PDF
+            $pdo = Database::connect();
+            $stmt = $pdo->prepare("UPDATE contrats SET pdf_contrat = ? WHERE id = ?");
+            $stmt->execute([$pdf_filename, $contratId]);
+            
+            // Message de succès
+            $message = 'Contrat créé avec succès ! Un fichier PDF sera généré prochainement.';
+            $message_type = 'success';
+            
+            // Redirection après succès
+            $_SESSION['success'] = $message;
+            header('Location: gestion_contrats.php?success=1');
+            exit;
+        } else {
+            throw new Exception("Échec de la création du contrat");
+        }
+    } catch (Exception $e) {
         $message = 'Erreur lors de la création du contrat : ' . $e->getMessage();
         $message_type = 'danger';
+        error_log($message);
     }
 }
 ?>

@@ -1,0 +1,21 @@
+# Interdire l'exécution de fichiers PHP dans ce répertoire
+<FilesMatch "\.(php|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Empêcher le listage des fichiers
+Options -Indexes
+
+# Désactiver l'exécution de scripts CGI
+Options -ExecCGI
+
+# Désactiver l'inclusion côté serveur
+Options -Includes
+
+# Protéger contre les accès directs aux fichiers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options: "nosniff"
+    Header set X-Frame-Options: "SAMEORIGIN"
+    Header set X-XSS-Protection: "1; mode=block"
+</IfModule>

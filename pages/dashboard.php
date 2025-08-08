@@ -36,9 +36,9 @@ $occupationLabels = '[]';
 $occupationData = '[]';
 
 // Vérification et encodage des données pour les graphiques
-if (isset($stats['revenus_12_mois'])) {
-    $revenusMoisLabels = json_encode($stats['revenus_12_mois']['labels'] ?? []);
-    $revenusMoisData = json_encode($stats['revenus_12_mois']['data'] ?? []);
+if (isset($stats['revenus_mois_courant_data'])) {
+    $revenusMoisLabels = json_encode($stats['revenus_mois_courant_data']['labels'] ?? []);
+    $revenusMoisData = json_encode($stats['revenus_mois_courant_data']['data'] ?? []);
 }
 
 if (isset($stats['depenses_par_categorie'])) {
@@ -65,9 +65,14 @@ $nombreAppartements = $result['total'] ?? 0;
     $nombreProprietaires = $result['total'] ?? 0;
     
     // Compter le nombre d'utilisateurs
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM utilisateurs");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $nombreUtilisateurs = $result['total'] ?? 0;
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) as total FROM utilisateurs");
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $nombreUtilisateurs = $result['total'] ?? 0;
+    } catch (Exception $e) {
+        $nombreUtilisateurs = 0;
+        error_log("Erreur lors du comptage des utilisateurs : " . $e->getMessage());
+    }
 
     // Compter le nombre de contrats actifs
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM contrats WHERE date_fin >= CURDATE()");
@@ -197,144 +202,28 @@ function getIconeTendance($valeur) {
   <!-- End Header -->
 
   <!-- ======= Sidebar ======= -->
-  <aside id="sidebar" class="sidebar">
-    <ul class="sidebar-nav" id="sidebar-nav">
-      <li class="nav-item">
-        <a class="nav-link" href="dashboard.php">
-          <i class="bi bi-grid"></i>
-          <span>Tableau de bord</span>
-        </a>
-      </li>
-      <!-- End Dashboard Nav -->
-
-      <!-- Sidebar / menu -->
-      <?php include(__DIR__ . "/menu.php"); ?>
-      <!-- End Sidebar -->
-    </ul>
-  </aside>
+  <?php include("sidebar.php"); ?>
   <!-- End Sidebar -->
 
   <main id="main" class="main">
+    <div class="pagetitle">
+      <h1>Tableau de bord</h1>
+      <nav>
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="index.php">Accueil</a></li>
+          <li class="breadcrumb-item active">Tableau de bord</li>
+        </ol>
+      </nav>
+    </div><!-- End Page Title -->
+
     <section class="section dashboard">
-      <!-- Ligne des cartes principales en haut -->
-      <div class="row mb-4">
-        <!-- Carte Utilisateurs -->
-        <div class="col-xxl-3 col-md-6 mb-3">
-          <div class="card h-100 highlight-card users">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <div class="card-icon bg-primary bg-opacity-10">
-                  <i class="bi bi-people text-primary"></i>
-                </div>
-                <div>
-                  <h6 class="card-title text-muted mb-1">Utilisateurs</h6>
-                  <h3 class="mb-0"><?php echo $nombreUtilisateurs; ?></h3>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a href="gestion_utilisateurs.php" class="small text-primary text-decoration-none">
-                  Voir tous <i class="bi bi-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Carte Appartements -->
-        <div class="col-xxl-3 col-md-6 mb-3">
-          <div class="card h-100 highlight-card appartements">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <div class="card-icon bg-info bg-opacity-10">
-                  <i class="bi bi-house text-info"></i>
-                </div>
-                <div>
-                  <h6 class="card-title text-muted mb-1">Appartements</h6>
-                  <h3 class="mb-0"><?php echo $nombreAppartements; ?></h3>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a href="gestion_appartements.php" class="small text-info text-decoration-none">
-                  Voir tous <i class="bi bi-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Carte Locataires -->
-        <div class="col-xxl-3 col-md-6 mb-3">
-          <div class="card h-100 highlight-card locataires">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <div class="card-icon bg-success bg-opacity-10">
-                  <i class="bi bi-people-fill text-success"></i>
-                </div>
-                <div>
-                  <h6 class="card-title text-muted mb-1">Locataires</h6>
-                  <h3 class="mb-0"><?php echo $nombreLocataires; ?></h3>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a href="gestion_locataires.php" class="small text-success text-decoration-none">
-                  Voir tous <i class="bi bi-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Carte Propriétaires -->
-        <div class="col-xxl-3 col-md-6 mb-3">
-          <div class="card h-100 highlight-card proprietaires">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <div class="card-icon bg-warning bg-opacity-10">
-                  <i class="bi bi-house-door text-warning"></i>
-                </div>
-                <div>
-                  <h6 class="card-title text-muted mb-1">Propriétaires</h6>
-                  <h3 class="mb-0"><?php echo $nombreProprietaires; ?></h3>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a href="gestion_proprietaires.php" class="small text-warning text-decoration-none">
-                  Voir tous <i class="bi bi-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Carte Contrats -->
-        <div class="col-xxl-3 col-md-6 mb-3">
-          <div class="card h-100 highlight-card contrats">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <div class="card-icon bg-danger bg-opacity-10">
-                  <i class="bi bi-file-earmark-text text-danger"></i>
-                </div>
-                <div>
-                  <h6 class="card-title text-muted mb-1">Contrats</h6>
-                  <h3 class="mb-0"><?php echo $nombreContrats ?? '0'; ?></h3>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a href="gestion_contrats.php" class="small text-danger text-decoration-none">
-                  Voir tous <i class="bi bi-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Contenu principal -->
+      <!-- Ligne supérieure avec cartes et activités récentes -->
       <div class="row">
-        <div class="col-12">
+        <!-- Colonne de cartes de statistiques -->
+        <div class="col-xxl-8">
           <div class="row">
             <!-- Carte Revenus du mois -->
-            <div class="col-xxl-3 col-md-6 mb-4">
+            <div class="col-xxl-6 col-md-6 mb-4">
               <div class="card info-card revenue-card">
                 <div class="card-body">
                   <h5 class="card-title">Revenus <span>| Ce mois</span></h5>
@@ -343,8 +232,8 @@ function getIconeTendance($valeur) {
                       <i class="bi bi-currency-euro"></i>
                     </div>
                     <div class="ps-3">
-                      <h6><?= formatMontant($stats['revenus_mois_courant']) ?></h6>
-                      <span class="text-<?= getCouleurMontant($stats['revenus_mois_courant']) ?> small pt-1 fw-bold">
+                      <h6><?= formatMontant($stats['revenus_mois_courant'] ?? 0) ?></h6>
+                      <span class="text-success small pt-1 fw-bold">
                         <?= getIconeTendance(10) ?> 10% vs mois dernier
                       </span>
                     </div>
@@ -353,59 +242,91 @@ function getIconeTendance($valeur) {
               </div>
             </div>
 
-            <!-- Carte Dépenses du mois -->
-            <div class="col-xxl-3 col-md-6 mb-4">
-              <div class="card info-card expenses-card">
-                <div class="card-body">
-                  <h5 class="card-title">Dépenses <span>| Ce mois</span></h5>
-                  <div class="d-flex align-items-center">
-                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-cash-stack"></i>
-                    </div>
-                    <div class="ps-3">
-                      <h6><?= formatMontant($stats['depenses_mois_courant']) ?></h6>
-                      <span class="text-<?= getCouleurMontant(-5) ?> small pt-1 fw-bold">
-                        <?= getIconeTendance(-5) ?> 5% vs mois dernier
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Carte Bénéfices -->
-            <div class="col-xxl-3 col-md-6 mb-4">
-              <div class="card info-card sales-card">
-                <div class="card-body">
-                  <h5 class="card-title">Bénéfices <span>| Ce mois</span></h5>
-                  <div class="d-flex align-items-center">
-                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-graph-up-arrow"></i>
-                    </div>
-                    <div class="ps-3">
-                      <h6><?= formatMontant($stats['benefices_mois']) ?></h6>
-                      <span class="text-<?= getCouleurMontant($stats['benefices_mois']) ?> small pt-1 fw-bold">
-                        <?= getIconeTendance(12) ?> 12% vs mois dernier
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Carte Taux d'occupation -->
-            <div class="col-xxl-3 col-md-6 mb-4">
+            <!-- Carte Appartements -->
+            <div class="col-xxl-6 col-md-6 mb-4">
               <div class="card info-card customers-card">
                 <div class="card-body">
-                  <h5 class="card-title">Taux d'occupation</h5>
+                  <h5 class="card-title">Appartements</h5>
                   <div class="d-flex align-items-center">
                     <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
-                      <i class="bi bi-house-check"></i>
+                      <i class="bi bi-building"></i>
                     </div>
                     <div class="ps-3">
-                      <h6><?= $stats['taux_occupation'] ?>%</h6>
-                      <span class="text-<?= $stats['taux_occupation'] > 70 ? 'success' : 'warning' ?> small pt-1 fw-bold">
-                        <?= $stats['appartements_loues'] ?> / <?= $stats['appartements_loues'] + $stats['appartements_libres'] ?> apparts
+                      <h6><?= $nombreAppartements ?></h6>
+                      <span class="text-success small pt-1 fw-bold">5% vs mois dernier</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Carte Locataires -->
+            <div class="col-xxl-4 col-md-6 mb-4">
+              <div class="card info-card locataires">
+                <div class="card-body">
+                  <h5 class="card-title">Locataires</h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-people"></i>
+                    </div>
+                    <div class="ps-3">
+                      <h6><?= $nombreLocataires ?></h6>
+                      <span class="text-success small pt-1 fw-bold">12% vs mois dernier</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Carte Propriétaires -->
+            <div class="col-xxl-4 col-md-6 mb-4">
+              <div class="card info-card proprietaires">
+                <div class="card-body">
+                  <h5 class="card-title">Propriétaires</h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-house-door"></i>
+                    </div>
+                    <div class="ps-3">
+                      <h6><?= $nombreProprietaires ?></h6>
+                      <span class="text-success small pt-1 fw-bold">8% vs mois dernier</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Carte Utilisateurs -->
+            <div class="col-xxl-4 col-md-6 mb-4">
+              <div class="card info-card users-card">
+                <div class="card-body">
+                  <h5 class="card-title">Utilisateurs</h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-people"></i>
+                    </div>
+                    <div class="ps-3">
+                      <h6><?= $nombreUtilisateurs ?? 0 ?></h6>
+                      <span class="text-success small pt-1 fw-bold">0% vs mois dernier</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Carte Contrats -->
+            <div class="col-xxl-4 col-md-6 mb-4">
+              <div class="card info-card contracts-card">
+                <div class="card-body">
+                  <h5 class="card-title">Contrats</h5>
+                  <div class="d-flex align-items-center">
+                    <div class="card-icon rounded-circle d-flex align-items-center justify-content-center">
+                      <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="ps-3">
+                      <h6><?= $nombreContratsActifs ?? 0 ?> <small class="text-muted">/ <?= $nombreContratsTotal ?? 0 ?></small></h6>
+                      <span class="text-success small pt-1 fw-bold">
+                        <?= $tauxOccupation ?? 0 ?>% d'occupation
                       </span>
                     </div>
                   </div>
@@ -413,6 +334,172 @@ function getIconeTendance($valeur) {
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Colonne des activités récentes -->
+        <div class="col-xxl-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Activités récentes</h5>
+              <div class="activity" style="max-height: 400px; overflow-y: auto;">
+                <?php if (!empty($activitesRecentes)): ?>
+                  <?php foreach (array_slice($activitesRecentes, 0, 5) as $activite): ?>
+                  <div class="activity-item d-flex">
+                    <div class="activite-label"><?= date('d M', strtotime($activite['date_creation'])) ?></div>
+                    <i class="bi bi-circle-fill activity-badge text-<?= $activite['type'] == 'contrat' ? 'success' : 'primary' ?> align-self-start"></i>
+                    <div class="activity-content">
+                      <?= htmlspecialchars($activite['description']) ?>
+                      <span class="text-muted small d-block"><?= date('H:i', strtotime($activite['date_creation'])) ?></span>
+                    </div>
+                  </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="text-center py-3">
+                    <i class="bi bi-activity text-muted" style="font-size: 2rem;"></i>
+                    <p class="text-muted mt-2 mb-0">Aucune activité récente</p>
+                  </div>
+                <?php endif; ?>
+              </div>
+              <div class="text-end mt-2">
+                <a href="#" class="btn btn-sm btn-outline-primary">Voir tout</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+                  
+      <!-- Scripts pour les graphiques -->
+      <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+      <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // Graphique des revenus
+        var revenueOptions = {
+          series: [{
+            name: 'Revenus',
+            data: <?= $revenusMoisData ?: '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]' ?>
+          }],
+          chart: {
+            type: 'bar',
+            height: 350,
+            toolbar: {
+              show: true
+            }
+          },
+          plotOptions: {
+            bar: {
+              borderRadius: 4,
+              horizontal: false,
+            }
+          },
+          dataLabels: {
+            enabled: false
+          },
+          xaxis: {
+            categories: <?= $revenusMoisLabels ?: '["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]' ?>
+          },
+          colors: ['#0d6efd']
+        };
+
+        var revenueChart = new ApexCharts(document.querySelector("#revenueChart"), revenueOptions);
+        revenueChart.render();
+
+        // Graphique des dépenses par catégorie
+        var expenseOptions = {
+          series: <?= $depensesCategoriesData ?: '[0, 0, 0, 0, 0]' ?>,
+          chart: {
+            type: 'donut',
+            height: 300
+          },
+          labels: <?= $depensesCategoriesLabels ?: '["Entretien", "Taxes", "Assurances", "Autres"]' ?>,
+          colors: ['#0d6efd', '#6c757d', '#198754', '#ffc107', '#dc3545'],
+          legend: {
+            position: 'bottom'
+          },
+          plotOptions: {
+            pie: {
+              donut: {
+                size: '60%',
+              }
+            }
+          }
+        };
+
+        var expenseChart = new ApexCharts(document.querySelector("#expenseChart"), expenseOptions);
+        expenseChart.render();
+      });
+      </script>
+
+      <!-- Styles pour les activités récentes -->
+      <style>
+      .activity {
+        position: relative;
+        padding-left: 2rem;
+      }
+
+      .activity .activity-item {
+        position: relative;
+        padding-bottom: 1.5rem;
+        border-left: 2px solid #e9ecef;
+        padding-left: 1.5rem;
+      }
+
+      .activity .activity-item:last-child {
+        padding-bottom: 0;
+        border-left-color: transparent;
+      }
+
+      .activity .activity-item::before {
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        left: -7px;
+        top: 0;
+        background: #fff;
+        border: 2px solid #0d6efd;
+        z-index: 1;
+      }
+
+      .activity .activity-badge {
+        position: absolute;
+        left: -5px;
+        top: 0;
+        font-size: 0.6rem;
+      }
+
+      .activity .activity-content {
+        padding-left: 1.5rem;
+      }
+
+      .activity .activite-label {
+        color: #6c757d;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+      }
+
+      .badge {
+        font-weight: 500;
+        padding: 0.4em 0.8em;
+      }
+      </style>
+
+      
+        
+        
+      
+      <!-- Contenu principal -->
+      <div class="row">
+   
 
           <!-- Graphiques -->
           <div class="row">
@@ -420,7 +507,7 @@ function getIconeTendance($valeur) {
             <div class="col-12 col-lg-8">
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Revenus des 12 derniers mois</h5>
+                  <h5 class="card-title">Revenus du mois en cours (<?= date('F Y') ?>)</h5>
                   <div id="revenueChart" style="min-height: 300px;"></div>
                 </div>
               </div>
@@ -490,164 +577,7 @@ function getIconeTendance($valeur) {
           </div>
 
 
-            <!-- Liste des Derniers Ajouts -->
-            <div class="col-12">
-              <div class="card">
-                <div class="card-body">
-                  <h5 class="card-title">Derniers ajouts</h5>
-                  
-                  <!-- Derniers Locataires -->
-                  <div class="mb-4">
-                    <h6>Derniers locataires</h6>
-                    <?php if (!empty($derniersLocataires)): ?>
-                      <div class="table-responsive">
-                        <table class="table table-hover">
-                          <thead>
-                            <tr>
-                              <th>Nom</th>
-                              <th>Téléphone</th>
-                              <th>Email</th>
-                              <th>Date d'ajout</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <?php foreach ($derniersLocataires as $locataire): ?>
-                              <tr>
-                                <td><?php echo htmlspecialchars($locataire['nom'] . ' ' . $locataire['prenom']); ?></td>
-                                <td><?php echo htmlspecialchars($locataire['telephone'] ?? 'N/A'); ?></td>
-                                <td><?php echo htmlspecialchars($locataire['email'] ?? 'N/A'); ?></td>
-                                <td><?php echo date('d/m/Y', strtotime($locataire['date_creation'])); ?></td>
-                              </tr>
-                            <?php endforeach; ?>
-                          </tbody>
-                        </table>
-                      </div>
-                    <?php else: ?>
-                      <p class="text-muted">Aucun locataire enregistré</p>
-                    <?php endif; ?>
-                  </div>
-
-                  <!-- Derniers Appartements -->
-                  <div class="mb-4">
-                    <h6>Derniers appartements</h6>
-                    <?php if (!empty($derniersAppartements)): ?>
-                      <div class="table-responsive">
-                        <table class="table table-hover">
-                          <thead>
-                            <tr>
-                              <th>Adresse</th>
-                              <th>Type</th>
-                              <th>Surface</th>
-                              <th>Loyer</th>
-                              <th>Statut</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <?php foreach ($derniersAppartements as $appartement): ?>
-                              <tr>
-                                <td><?php echo htmlspecialchars($appartement['adresse']); ?></td>
-                                <td><?php echo htmlspecialchars($appartement['type'] ?? 'N/A'); ?></td>
-                                <td><?php echo htmlspecialchars($appartement['surface'] ?? '0'); ?> m²</td>
-                                <td><?php echo number_format($appartement['loyer'] ?? 0, 2, ',', ' '); ?> €</td>
-                                <td>
-                                  <span class="badge bg-<?php echo ($appartement['statut'] === 'Libre') ? 'success' : 'danger'; ?>">
-                                    <?php echo htmlspecialchars($appartement['statut']); ?>
-                                  </span>
-                                </td>
-                              </tr>
-                            <?php endforeach; ?>
-                          </tbody>
-                        </table>
-                      </div>
-                    <?php else: ?>
-                      <p class="text-muted">Aucun appartement enregistré</p>
-                    <?php endif; ?>
-                  </div>
-
-                  <!-- Derniers Contrats -->
-                  <div class="mb-4">
-                    <h6>Derniers contrats</h6>
-                    <?php if (!empty($derniersContrats)): ?>
-                      <div class="table-responsive">
-                        <table class="table table-hover">
-                          <thead>
-                            <tr>
-                              <th>ID</th>
-                              <th>Locataire</th>
-                              <th>Appartement</th>
-                              <th>Date début</th>
-                              <th>Date fin</th>
-                              <th>Loyer</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <?php foreach ($derniersContrats as $contrat): ?>
-                              <tr>
-                                <td>#<?php echo htmlspecialchars($contrat['id']); ?></td>
-                                <td><?php echo htmlspecialchars($contrat['locataire_nom'] ?? 'N/A'); ?></td>
-                                <td><?php echo htmlspecialchars($contrat['appartement_adresse'] ?? 'N/A'); ?></td>
-                                <td><?php echo date('d/m/Y', strtotime($contrat['date_debut'])); ?></td>
-                                <td><?php echo date('d/m/Y', strtotime($contrat['date_fin'])); ?></td>
-                                <td><?php echo number_format($contrat['loyer'], 2, ',', ' '); ?> €</td>
-                              </tr>
-                            <?php endforeach; ?>
-                          </tbody>
-                        </table>
-                      </div>
-                    <?php else: ?>
-                      <p class="text-muted">Aucun contrat enregistré</p>
-                    <?php endif; ?>
-                  </div>
-
-                </div>
-              </div>
-            </div>
-            <!-- End Liste des Derniers Ajouts -->
-
-          </div>
-        </div>
-        <!-- End Left side columns -->
-
-        <!-- Right side columns -->
-        <div class="col-lg-4">
-          <!-- Activité récente -->
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Activité récente</h5>
-              <div class="activity">
-                <?php if (!empty($activitesRecentes)): ?>
-                  <?php foreach ($activitesRecentes as $activite): ?>
-                    <div class="activity-item d-flex">
-                      <div class="activite-label">
-                        <?php 
-                          $date = new DateTime($activite['date_creation']);
-                          echo $date->format('d M Y');
-                        ?>
-                      </div>
-                      <i class='bi bi-circle-fill activity-badge text-<?php 
-                        echo match($activite['type']) {
-                          'locataire' => 'success',
-                          'appartement' => 'primary',
-                          'contrat' => 'info',
-                          default => 'secondary'
-                        };
-                      ?> align-self-start'></i>
-                      <div class="activity-content">
-                        <?php echo htmlspecialchars($activite['description']); ?>
-                        <div class="text-muted small">
-                          <?php echo date('H:i', strtotime($activite['date_creation'])); ?>
-                        </div>
-                      </div>
-                    </div>
-                  <?php endforeach; ?>
-                <?php else: ?>
-                  <p class="text-muted">Aucune activité récente</p>
-                <?php endif; ?>
-              </div>
-            </div>
-          </div>
-          <!-- End Activité récente -->
-        </div>
+           
         <!-- End Right side columns -->
 
       </div>
@@ -661,7 +591,6 @@ function getIconeTendance($valeur) {
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 
   <!-- Vendor JS Files -->
-  <script src="../assets/vendor/apexcharts/apexcharts.min.js"></script>
   <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/vendor/chart.js/chart.umd.js"></script>
   <script src="../assets/vendor/echarts/echarts.min.js"></script>
@@ -784,23 +713,142 @@ function getIconeTendance($valeur) {
   </script>
 
   <!-- ======= Graphiques avec ApexCharts ======= -->
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Graphique des revenus sur 12 mois
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script>
+  // Vérification des données pour le débogage
+  console.log('=== DÉBOGAGE GRAPHIQUE DES REVENUS ===');
+  
+  // Afficher les données brutes reçues de PHP
+  var revenusData = <?= $revenusMoisData ?>;
+  var revenusLabels = <?= $revenusMoisLabels ?>;
+  
+  console.log('Données des revenus (PHP):', revenusData);
+  console.log('Labels des revenus (PHP):', revenusLabels);
+  console.log('Type des données:', typeof revenusData[0]);
+  console.log('Type des labels:', typeof revenusLabels[0]);
+  
+  // Vérification de l'existence de l'élément du graphique
+  console.log('Élément du graphique des revenus trouvé:', !!document.querySelector('#revenueChart'));
+  console.log('ApexCharts est disponible:', typeof ApexCharts !== 'undefined');
+
+  // Attente que le DOM soit complètement chargé
+  document.addEventListener('DOMContentLoaded', function() {
+    // Délai supplémentaire pour s'assurer que tout est chargé
+    setTimeout(initializeCharts, 500);
+  });
+
+  function initializeCharts() {
+    // Vérification de l'existence des conteneurs
+    if (!document.querySelector("#revenueChart") || !document.querySelector("#expenseChart") || !document.querySelector("#occupationChart")) {
+      console.error("Un ou plusieurs conteneurs de graphiques sont manquants");
+      return;
+    }
+    // Graphique des revenus du mois en cours
+    console.log('Initialisation du graphique des revenus du mois en cours...');
+    
+    // Vérification et conversion des données
+    if (typeof revenusData === 'string') {
+        try {
+            revenusData = JSON.parse(revenusData);
+        } catch (e) {
+            console.error('Erreur de parsing des données des revenus:', e);
+            revenusData = [];
+        }
+    }
+    
+    if (typeof revenusLabels === 'string') {
+        try {
+            revenusLabels = JSON.parse(revenusLabels);
+        } catch (e) {
+            console.error('Erreur de parsing des labels des revenus:', e);
+            revenusLabels = [];
+        }
+    }
+    
+    // Vérification des données
+    console.log('Données des revenus (JS):', revenusData);
+    console.log('Labels des revenus (JS):', revenusLabels);
+    
+    // S'assurer que les données sont des tableaux
+    revenusData = Array.isArray(revenusData) ? revenusData : [];
+    revenusLabels = Array.isArray(revenusLabels) ? revenusLabels : [];
+    
+    // Conversion des données en nombres si nécessaire
+    if (revenusData.length > 0) {
+        console.log('Conversion des données en nombres...');
+        revenusData = revenusData.map(function(item) {
+            const num = parseFloat(item);
+            return isNaN(num) ? 0 : num;
+        });
+        console.log('Données converties:', revenusData);
+    }
+    
+    // Vérifier s'il y a des données à afficher
+    if (revenusData.length === 0) {
+        console.log('Aucune donnée à afficher pour le graphique des revenus');
+        document.getElementById('revenueChart').innerHTML = '<div class="text-center p-5"><p class="text-muted">Aucune donnée de revenus disponible pour ce mois</p></div>';
+        return;
+    }
+    
     var revenueChartOptions = {
         series: [{
             name: 'Revenus',
-            data: <?= $revenusMoisData ?>
+            data: revenusData,
+            color: '#4154f1'
         }],
         chart: {
-            type: 'area',
+            type: 'bar',
             height: 350,
             zoom: {
                 enabled: false
             },
             toolbar: {
-                show: true
+                show: true,
+                tools: {
+                    download: true,
+                    selection: false,
+                    zoom: false,
+                    zoomin: false,
+                    zoomout: false,
+                    pan: false,
+                    reset: false
+                }
+            },
+            animations: {
+                enabled: true,
+                easing: 'easeinout',
+                speed: 800,
+                animateGradually: {
+                    enabled: true,
+                    delay: 150
+                },
+                dynamicAnimation: {
+                    enabled: true,
+                    speed: 350
+                }
+            },
+            events: {
+                mounted: function(chartContext, config) {
+                    console.log('Graphique des revenus monté avec succès');
+                },
+                updated: function(chartContext, config) {
+                    console.log('Graphique des revenus mis à jour');
+                },
+                error: function(chartContext, err) {
+                    console.error('Erreur lors du rendu du graphique:', err);
+                }
+            }
+        },
+        plotOptions: {
+            bar: {
+                borderRadius: 4,
+                horizontal: false,
+                columnWidth: '60%',
+                endingShape: 'rounded',
+                dataLabels: {
+                    position: 'top'
+                },
+                distributed: false
             }
         },
         colors: ['#4154f1'],
@@ -808,29 +856,118 @@ document.addEventListener('DOMContentLoaded', function() {
             enabled: false
         },
         stroke: {
-            curve: 'smooth',
-            width: 2
+            show: false
+        },
+        fill: {
+            opacity: 1,
+            colors: ['#4154f1'],
+            gradient: {
+                shade: 'dark',
+                type: 'vertical',
+                shadeIntensity: 0.5,
+                gradientToColors: ['#667eea'],
+                inverseColors: false,
+                opacityFrom: 0.8,
+                opacityTo: 0.2,
+                stops: [0, 100]
+            }
         },
         xaxis: {
             type: 'category',
-            categories: <?= $revenusMoisLabels ?>,
+            categories: revenusLabels,
+            tickAmount: revenusLabels.length > 15 ? 15 : revenusLabels.length, // Limiter le nombre de ticks pour plus de lisibilité
             labels: {
                 style: {
                     colors: '#6c757d',
-                    fontSize: '12px'
+                    fontSize: '10px',
+                    fontFamily: 'Arial, sans-serif',
+                    cssClass: 'apexcharts-xaxis-label'
+                },
+                rotate: -45,
+                rotateAlways: true,
+                hideOverlappingLabels: true,
+                trim: true,
+                maxHeight: 120
+            },
+            axisBorder: {
+                show: true,
+                color: '#e0e0e0',
+                height: 1,
+                width: '100%',
+                offsetX: 0,
+                offsetY: 0
+            },
+            axisTicks: {
+                show: true,
+                borderType: 'solid',
+                color: '#e0e0e0',
+                height: 6,
+                offsetX: 0,
+                offsetY: 0
+            },
+            title: {
+                text: 'Jours du mois',
+                offsetY: 80,
+                style: {
+                    color: '#6c757d',
+                    fontSize: '12px',
+                    fontFamily: 'Arial, sans-serif',
+                    cssClass: 'apexcharts-xaxis-title'
                 }
+            },
+            tooltip: {
+                enabled: false
             }
         },
         yaxis: {
             labels: {
                 formatter: function(value) {
-                    return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR'});
+                    if (value >= 1000) {
+                        return (value / 1000).toFixed(1) + 'K €';
+                    }
+                    return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0});
                 },
                 style: {
                     colors: '#6c757d',
-                    fontSize: '12px'
+                    fontSize: '10px',
+                    fontFamily: 'Arial, sans-serif',
+                    cssClass: 'apexcharts-yaxis-label'
+                },
+                align: 'right',
+                minWidth: 50,
+                maxWidth: 60
+            },
+            axisBorder: {
+                show: true,
+                color: '#e0e0e0',
+                width: 1,
+                offsetX: 0,
+                offsetY: 0
+            },
+            axisTicks: {
+                show: true,
+                borderType: 'solid',
+                color: '#e0e0e0',
+                width: 6,
+                offsetX: 0,
+                offsetY: 0
+            },
+            title: {
+                text: 'Montant (€)',
+                style: {
+                    color: '#6c757d',
+                    fontSize: '12px',
+                    fontFamily: 'Arial, sans-serif',
+                    cssClass: 'apexcharts-yaxis-title'
                 }
-            }
+            },
+            tooltip: {
+                enabled: false
+            },
+            forceNiceScale: true,
+            decimalsInFloat: 2,
+            min: 0,
+            tickAmount: 5
         },
         tooltip: {
             y: {
@@ -841,8 +978,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    var revenueChart = new ApexCharts(document.querySelector("#revenueChart"), revenueChartOptions);
-    revenueChart.render();
+    try {
+      var chartElement = document.querySelector("#revenueChart");
+      if (!chartElement) {
+        throw new Error("L'élément du graphique n'a pas été trouvé");
+      }
+      
+      // Vérifier si le conteneur a une hauteur
+      if (chartElement.offsetHeight === 0) {
+        console.warn("Le conteneur du graphique a une hauteur de 0, vérifiez le CSS");
+        chartElement.style.minHeight = '350px';
+      }
+      
+      console.log('Création du graphique avec les options:', revenueChartOptions);
+      var revenueChart = new ApexCharts(chartElement, revenueChartOptions);
+      
+      // Ajouter un gestionnaire d'erreur
+      revenueChart.w.globals.events.on('dataPointSelection', function(e, chart, options) {
+        console.log('Point sélectionné:', options);
+      });
+      
+      revenueChart.render().then(() => {
+        console.log("Graphique des revenus rendu avec succès");
+        console.log('Largeur du conteneur:', chartElement.offsetWidth);
+        console.log('Hauteur du conteneur:', chartElement.offsetHeight);
+      }).catch(error => {
+        console.error("Erreur lors du rendu du graphique:", error);
+      });
+      
+    } catch (error) {
+      console.error("Erreur lors de l'initialisation du graphique des revenus:", error);
+      console.error('Détails de l\'erreur:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
 
     // Graphique des dépenses par catégorie
     var expenseChartOptions = {
@@ -886,8 +1057,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    var expenseChart = new ApexCharts(document.querySelector("#expenseChart"), expenseChartOptions);
-    expenseChart.render();
+    try {
+      var expenseChart = new ApexCharts(document.querySelector("#expenseChart"), expenseChartOptions);
+      expenseChart.render();
+      console.log("Graphique des dépenses initialisé avec succès");
+    } catch (error) {
+      console.error("Erreur lors de l'initialisation du graphique des dépenses:", error);
+    }
 
     // Graphique du taux d'occupation par immeuble
     var occupationChartOptions = {
@@ -951,8 +1127,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    var occupationChart = new ApexCharts(document.querySelector("#occupationChart"), occupationChartOptions);
-    occupationChart.render();
+    try {
+      var occupationChart = new ApexCharts(document.querySelector("#occupationChart"), occupationChartOptions);
+      occupationChart.render();
+      console.log("Graphique d'occupation initialisé avec succès");
+    } catch (error) {
+      console.error("Erreur lors de l'initialisation du graphique d'occupation:", error);
+    }
+  } // Fin de la fonction initializeCharts
 });
 </script>
 

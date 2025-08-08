@@ -49,18 +49,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'supprimer' && isset($_GET['id
     <?php include("header.php"); ?>
     <!-- End Header -->
 
-    <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar">
-        <ul class="sidebar-nav" id="sidebar-nav">
-            <li class="nav-item">
-                <a class="nav-link" href="dashboard.php">
-                    <i class="bi bi-grid"></i>
-                    <span>Tableau de bord</span>
-                </a>
-            </li>
-            <?php include("menu.php"); ?>
-        </ul>
-    </aside>
+    <!-- ======= Sidebar ======= -->
+    <?php include("sidebar.php"); ?>
     <!-- End Sidebar -->
 
     <main id="main" class="main">
@@ -115,13 +105,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'supprimer' && isset($_GET['id
                                             <td><?= htmlspecialchars($utilisateur['email']) ?></td>
                                             <td><?= htmlspecialchars($utilisateur['role']) ?></td>
                                             <td>
-                                                <a href="modifier_utilisateur.php?id=<?= $utilisateur['id'] ?>" class="btn btn-primary btn-sm">
+                                                <a href="voir_utilisateur.php?id=<?= $utilisateur['id'] ?>" class="btn btn-info btn-sm text-white" title="Voir les détails">
+                                                    <i class="bi bi-eye"></i> Voir
+                                                </a>
+                                                <a href="modifier_utilisateur.php?id=<?= $utilisateur['id'] ?>" class="btn btn-primary btn-sm" title="Modifier">
                                                     <i class="bi bi-pencil"></i> Modifier
                                                 </a>
                                                 <?php if ($utilisateur['id'] != $_SESSION['user_id']): ?>
                                                     <a href="gestion_utilisateurs.php?action=supprimer&id=<?= $utilisateur['id'] ?>" 
                                                        class="btn btn-danger btn-sm" 
-                                                       onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')">
+                                                       onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')"
+                                                       title="Supprimer">
                                                         <i class="bi bi-trash"></i> Supprimer
                                                     </a>
                                                 <?php endif; ?>

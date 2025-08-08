@@ -104,10 +104,123 @@ if (!$user) {
             <div class="col-xl-8 mx-auto">
                 <div class="profile-card">
                     <div class="profile-header text-center">
-                        <img src="../assets/img/profile-img.jpg" alt="Photo de profil" class="profile-avatar">
+                        <?php
+                        $photoPath = !empty($user['photo']) ? '../uploads/profiles/' . $user['photo'] : '../assets/img/profile-img.jpg';
+                        ?>
+                        <img src="<?php echo $photoPath; ?>" alt="Photo de profil" class="profile-avatar" id="profileImage">
                         <h2><?php echo htmlspecialchars($user['prenom'] . ' ' . $user['nom']); ?></h2>
                         <h5 class="text-muted"><?php echo htmlspecialchars(ucfirst($user['role'])); ?></h5>
+                        <button type="button" class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#updatePhotoModal">
+                            <i class="bi bi-camera"></i> Modifier la photo
+                        </button>
                     </div>
+                    
+                    <!-- Modal pour la mise à jour de la photo -->
+                    <div class="modal fade" id="updatePhotoModal" tabindex="-1" aria-labelledby="updatePhotoModalLabel" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="updatePhotoModalLabel">Modifier la photo de profil</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form action="../actions/update_photo.php" method="POST" enctype="multipart/form-data" id="photoForm">
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label for="photo" class="form-label">Sélectionner une image</label>
+                                            <input class="form-control" type="file" id="photo" name="photo" accept="image/*" required>
+                                            <div class="form-text">Formats acceptés : JPG, PNG, JPEG. Taille maximale : 2MB</div>
+                                        </div>
+                                        <div class="text-center">
+                                            <img id="imagePreview" src="<?php echo $photoPath; ?>" alt="Aperçu" class="img-fluid rounded" style="max-height: 200px;">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                                        <button type="submit" class="btn btn-primary">Enregistrer</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <script>
+                    // Attendre que le DOM soit chargé
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // Aperçu de l'image avant l'upload
+                        const photoInput = document.getElementById('photo');
+                        if (photoInput) {
+                            photoInput.addEventListener('change', function(e) {
+                                const file = e.target.files[0];
+                                if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = function(e) {
+                                        const preview = document.getElementById('imagePreview');
+                                        if (preview) {
+                                            preview.src = e.target.result;
+                                        }
+                                    }
+                                    reader.readAsDataURL(file);
+                                }
+                            });
+                        }
+                        
+                        // Mise à jour de l'image après upload réussi
+                        const photoForm = document.getElementById('photoForm');
+                        if (photoForm) {
+                            photoForm.addEventListener('submit', function(e) {
+                                e.preventDefault();
+                                const formData = new FormData(this);
+                                
+                                fetch(this.action, {
+                                    method: 'POST',
+                                    body: formData
+                                })
+                                .then(response => {
+                                    if (!response.ok) {
+                                        throw new Error('Erreur réseau');
+                                    }
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    if (data.success) {
+                                        // Mettre à jour l'image de profil
+                                        const profileImage = document.getElementById('profileImage');
+                                        if (profileImage) {
+                                            profileImage.src = data.photoUrl + '?t=' + new Date().getTime();
+                                        }
+                                        
+                                        // Fermer la modale
+                                        const modalElement = document.getElementById('updatePhotoModal');
+                                        if (modalElement) {
+                                            const modal = bootstrap.Modal.getInstance(modalElement);
+                                            if (modal) {
+                                                modal.hide();
+                                            } else {
+                                                const bsModal = new bootstrap.Modal(modalElement);
+                                                bsModal.hide();
+                                            }
+                                        }
+                                        
+                                        // Afficher un message de succès
+                                        alert('Photo de profil mise à jour avec succès !');
+                                    } else {
+                                        alert(data.message || 'Une erreur est survenue lors de la mise à jour de la photo.');
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Erreur:', error);
+                                    alert('Une erreur est survenue lors de la communication avec le serveur.');
+                                });
+                            });
+                        }
+                        
+                        // Activer les tooltips
+                        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                        tooltipTriggerList.map(function (tooltipTriggerEl) {
+                            return new bootstrap.Tooltip(tooltipTriggerEl);
+                        });
+                    });
+                    </script>
 
                     <div class="profile-details">
                         <div class="detail-item">

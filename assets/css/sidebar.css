@@ -1,10 +1,10 @@
-/* Sidebar Styles */
+/* Sidebar */
 .sidebar {
     position: fixed;
-    top: 0;
+    top: 60px;
     left: 0;
     bottom: 0;
-    width: 300px;
+    width: 280px;
     z-index: 996;
     transition: all 0.3s;
     padding: 20px;
@@ -13,20 +13,9 @@
     scrollbar-color: #aab7cf transparent;
     box-shadow: 0px 0px 20px rgba(1, 41, 112, 0.1);
     background-color: #fff;
-    margin-top: 70px; /* Hauteur du header */
 }
 
-.sidebar::-webkit-scrollbar {
-    width: 5px;
-    height: 8px;
-    background-color: #fff;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-    background-color: #aab7cf;
-    border-radius: 10px;
-}
-
+/* Navigation */
 .sidebar-nav {
     padding: 0;
     margin: 0;
@@ -43,20 +32,28 @@
     margin-bottom: 5px;
 }
 
+.sidebar-nav .nav-heading {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #899bbd;
+    font-weight: 600;
+    margin: 10px 0 5px 15px;
+}
+
 .sidebar-nav .nav-link {
     display: flex;
     align-items: center;
     font-size: 15px;
     font-weight: 600;
     color: #4154f1;
+    transition: 0.3;
     background: #f6f9ff;
-    padding: 12px 15px;
-    border-radius: 8px;
-    transition: all 0.3s;
+    padding: 10px 15px;
+    border-radius: 4px;
 }
 
 .sidebar-nav .nav-link i {
-    font-size: 18px;
+    font-size: 16px;
     margin-right: 10px;
     color: #4154f1;
 }
@@ -79,6 +76,15 @@
     color: #4154f1;
 }
 
+.sidebar-nav .nav-link .bi-chevron-down {
+    margin-right: 0;
+    transition: transform 0.2s ease-in-out;
+}
+
+.sidebar-nav .nav-link:not(.collapsed) .bi-chevron-down {
+    transform: rotate(180deg);
+}
+
 .sidebar-nav .nav-content {
     padding: 5px 0 0 0;
     margin: 0;
@@ -91,8 +97,151 @@
     font-size: 14px;
     font-weight: 600;
     color: #012970;
+    transition: 0.3;
     padding: 10px 0 10px 40px;
     transition: 0.3s;
+}
+
+.sidebar-nav .nav-content a i {
+    font-size: 6px;
+    margin-right: 8px;
+    line-height: 0;
+    border-radius: 50%;
+}
+
+.sidebar-nav .nav-content a:hover,
+.sidebar-nav .nav-content a.active {
+    color: #4154f1;
+}
+
+.sidebar-nav .nav-content a.active i {
+    background-color: #4154f1;
+}
+
+/* Active state */
+.sidebar-nav .nav-link.active,
+.sidebar-nav .nav-link:not(.collapsed) {
+    color: #4154f1;
+    background-color: #f6f9ff;
+}
+
+.sidebar-nav .nav-link.active i,
+.sidebar-nav .nav-link:not(.collapsed) i {
+    color: #4154f1;
+}
+
+/* Submenu */
+.sidebar-nav .nav-submenu {
+    padding-left: 2rem;
+    margin: 0.25rem 0;
+    display: none;
+}
+
+.sidebar-nav .nav-item.show .nav-submenu {
+    display: block;
+}
+
+.sidebar .nav-submenu .nav-link {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+/* Toggle icon */
+.sidebar .nav-link[data-bs-toggle="collapse"]::after {
+    content: '\f282';
+    font-family: 'bootstrap-icons';
+    margin-left: auto;
+    transition: transform 0.2s ease;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.sidebar .nav-link[data-bs-toggle="collapse"].collapsed::after {
+    content: '\f285';
+    transform: rotate(-90deg);
+}
+
+/* Scrollbar */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+    border-radius: 5px;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.sidebar-nav .nav-link i {
+    font-size: 18px;
+    margin-right: 10px;
+    color: #4154f1;
+}
+
+.sidebar-nav .nav-link.collapsed {
+    color: #495057;
+    background: transparent;
+}
+
+.sidebar-nav .nav-link.collapsed i {
+    color: #899bbd;
+}
+
+.sidebar-nav .nav-link:hover {
+    color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.sidebar-nav .nav-link.active {
+    color: #fff;
+    background-color: #0d6efd;
+}
+
+.sidebar-nav .nav-link.active i {
+    color: #fff;
+}
+
+.sidebar-nav .nav-link:hover i {
+    color: #4154f1;
+}
+
+.sidebar-nav .nav-content {
+    padding: 5px 0 0 0;
+    margin: 0;
+    list-style: none;
+}
+
+.sidebar-nav .nav-content a {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 400;
+    color: #6c757d;
+    padding: 8px 0 8px 50px;
+    margin: 0 15px;
+    border-radius: 5px;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.sidebar-nav .nav-content a:hover,
+.sidebar-nav .nav-content a.active {
+    color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.1);
 }
 
 .sidebar-nav .nav-content a i {

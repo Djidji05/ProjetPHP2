@@ -8,9 +8,11 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once '../includes/auth_check.php';
 require_once '../classes/Database.php';
 require_once '../classes/ContratController.php';
+require_once '../classes/PaiementController.php';
 
 use anacaona\Database;
 use anacaona\ContratController;
+use anacaona\PaiementController;
 
 // Vérifier si l'ID du contrat est fourni
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
@@ -22,9 +24,16 @@ $contratId = (int)$_GET['id'];
 
 // Initialiser le contrôleur de contrats
 $contratController = new ContratController();
+$paiementController = new PaiementController();
 
 // Récupérer les détails du contrat
 $contrat = $contratController->getContrat($contratId);
+
+// Récupérer les paiements du contrat
+$paiements = [];
+if ($contrat) {
+    $paiements = $paiementController->getPaiementsParContrat($contrat['id']);
+}
 
 // Vérifier si le contrat existe
 if (!$contrat) {
@@ -70,19 +79,9 @@ $estActif = $dateFin > $aujourdhui;
     <?php include("header.php"); ?>
     <!-- End Header -->
 
-    <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar">
-        <ul class="sidebar-nav" id="sidebar-nav">
-            <li class="nav-item">
-                <a class="nav-link" href="dashboard.php">
-                    <i class="bi bi-grid"></i>
-                    <span>Tableau de bord</span>
-                </a>
-            </li>
-            <?php include("menu.php"); ?>
-        </ul>
-    </aside>
-    <!-- End Sidebar-->
+    <!-- ======= Sidebar ======= -->
+    <?php include("sidebar.php"); ?>
+    <!-- End Sidebar -->
 
     <main id="main" class="main">
         <div class="pagetitle">
@@ -206,9 +205,9 @@ $estActif = $dateFin > $aujourdhui;
                             <div class="contrat-section">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Historique des paiements</h5>
-                                    <button class="btn btn-sm btn-primary">
+                                    <a href="ajouter_paiement.php?contrat_id=<?= $contrat['id'] ?>" class="btn btn-sm btn-primary">
                                         <i class="bi bi-plus-circle me-1"></i> Ajouter un paiement
-                                    </button>
+                                    </a>
                                 </div>
                                 
                                 <div class="table-responsive">
@@ -224,25 +223,36 @@ $estActif = $dateFin > $aujourdhui;
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <!-- Exemple de ligne de paiement -->
-                                            <tr>
-                                                <td>15/08/2023</td>
-                                                <td>Août 2023</td>
-                                                <td>850,00 €</td>
-                                                <td>Virement</td>
-                                                <td><span class="badge bg-success">Payé</span></td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">
-                                                        <i class="bi bi-receipt"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <!-- Fin exemple -->
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted">
-                                                    Aucun paiement enregistré pour ce contrat.
-                                                </td>
-                                            </tr>
+                                            <?php
+                                            if (!empty($paiements)) {
+                                                foreach ($paiements as $paiement) {
+                                                    $datePaiement = new DateTime($paiement['date_paiement']);
+                                                    $moisAnnee = $paiement['mois_annee'];
+                                                    $montant = number_format($paiement['montant'], 2, ',', ' ');
+                                                    $statutClass = $paiement['statut'] === 'payé' ? 'success' : 'warning';
+                                                    $statutText = ucfirst($paiement['statut']);
+                                                    
+                                                    echo "<tr>";
+                                                    echo "<td>" . $datePaiement->format('d/m/Y') . "</td>";
+                                                    echo "<td>" . htmlspecialchars($moisAnnee) . "</td>";
+                                                    echo "<td>" . htmlspecialchars($montant) . " €</td>";
+                                                    echo "<td>" . htmlspecialchars(ucfirst($paiement['methode_paiement'])) . "</td>";
+                                                    echo "<td><span class='badge bg-" . $statutClass . "'>" . $statutText . "</span></td>";
+                                                    echo "<td>";
+                                                    echo "<a href='facture.php?id=" . $paiement['id'] . "' class='btn btn-sm btn-outline-primary' title='Voir la facture'>";
+                                                    echo "<i class='bi bi-receipt'></i>";
+                                                    echo "</a>";
+                                                    echo "</td>";
+                                                    echo "</tr>";
+                                                }
+                                            } else {
+                                                echo "<tr>";
+                                                echo "<td colspan='6' class='text-center text-muted'>";
+                                                echo "Aucun paiement enregistré pour ce contrat.";
+                                                echo "</td>";
+                                                echo "</tr>";
+                                            }
+                                            ?>
                                         </tbody>
                                     </table>
                                 </div>
@@ -271,6 +281,63 @@ $estActif = $dateFin > $aujourdhui;
             </div>
         </section>
     </main>
+
+    <!-- Modal d'ajout de paiement -->
+    <div class="modal fade" id="ajouterPaiementModal" tabindex="-1" aria-labelledby="ajouterPaiementModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form action="ajouter_paiement.php" method="post" id="formAjoutPaiement">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="ajouterPaiementModalLabel">Nouveau Paiement</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="contrat_id" value="<?= $contrat['id'] ?>">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="montant" class="form-label">Montant <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="number" step="0.01" class="form-control" id="montant" name="montant" required>
+                                    <span class="input-group-text">€</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="date_paiement" class="form-label">Date du paiement <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="date_paiement" name="date_paiement" value="<?= date('Y-m-d') ?>" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="moyen_paiement" class="form-label">Moyen de paiement <span class="text-danger">*</span></label>
+                                <select class="form-select" id="moyen_paiement" name="moyen_paiement" required>
+                                    <option value="virement">Virement</option>
+                                    <option value="cheque">Chèque</option>
+                                    <option value="especes">Espèces</option>
+                                    <option value="carte_bancaire">Carte bancaire</option>
+                                    <option value="autre">Autre</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="reference" class="form-label">Référence</label>
+                                <input type="text" class="form-control" id="reference" name="reference" placeholder="N° de chèque, référence virement, etc.">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Enregistrer le paiement</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal de résiliation de contrat -->
     <div class="modal fade" id="resilierContratModal" tabindex="-1" aria-labelledby="resilierContratModalLabel" aria-hidden="true">
@@ -388,6 +455,41 @@ $estActif = $dateFin > $aujourdhui;
                 }
             });
         }
+    </script>
+    <script>
+    // Fonction pour confirmer la résiliation du contrat
+    function confirmerResiliation(contratId) {
+        // Afficher le modal de résiliation
+        var modal = new bootstrap.Modal(document.getElementById('resilierContratModal'));
+        modal.show();
+    }
+    
+    // Gérer la soumission du formulaire de résiliation
+    document.getElementById('resilierContratForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Vérifier la confirmation
+        if (!document.getElementById('confirmation').checked) {
+            alert('Veuillez confirmer que vous souhaitez résilier le contrat.');
+            return false;
+        }
+        
+        // Vérifier la date de résiliation
+        const dateDebut = new Date('<?= $contrat['date_debut'] ?>');
+        const dateFin = new Date('<?= $contrat['date_fin'] ?>');
+        const dateResiliation = new Date(document.getElementById('date_resiliation').value);
+        
+        if (dateResiliation < dateDebut || dateResiliation > dateFin) {
+            alert('La date de résiliation doit être comprise entre le début et la fin du contrat.');
+            return false;
+        }
+        
+        // Afficher un message de confirmation
+        if (confirm('Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.')) {
+            // Soumettre le formulaire
+            this.submit();
+        }
+    });
     </script>
 </body>
 </html>

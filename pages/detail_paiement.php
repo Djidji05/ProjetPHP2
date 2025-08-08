@@ -44,8 +44,8 @@ if (!$paiement) {
 $contrat = $contratController->getContrat($paiement['contrat_id']);
 
 // Récupération des détails du locataire et de l'appartement
-$locataire = $locataireController->getLocataire($contrat['locataire_id']);
-$appartement = $appartementController->getAppartement($contrat['appartement_id']);
+$locataire = $locataireController->getLocataireById($contrat['id_locataire']);
+$appartement = $appartementController->getAppartementById($contrat['id_appartement']);
 
 // Récupération de l'historique des paiements pour ce contrat
 $historiquePaiements = $paiementController->listerPaiements([
@@ -283,7 +283,7 @@ function formaterDate($date, $format = 'd/m/Y') {
                                                     </p>
                                                     <p class="mb-2">
                                                         <span class="detail-label">Loyer mensuel :</span>
-                                                        <?php echo formatMontant($contrat['montant_loyer']); ?>
+                                                        <?php echo formatMontant($contrat['loyer_mensuel'] ?? 0); ?>
                                                     </p>
                                                 </div>
                                                 <div class="col-md-6">
@@ -294,11 +294,11 @@ function formaterDate($date, $format = 'd/m/Y') {
                                                     </p>
                                                     <p class="mb-2">
                                                         <span class="detail-label">Type de contrat :</span>
-                                                        <?php echo ucfirst($contrat['type_contrat']); ?>
+                                                        <?php echo !empty($contrat['type_contrat']) ? ucfirst($contrat['type_contrat']) : 'Non spécifié'; ?>
                                                     </p>
                                                     <p class="mb-2">
                                                         <span class="detail-label">Durée :</span>
-                                                        <?php echo $contrat['duree_mois']; ?> mois
+                                                        <?php echo !empty($contrat['duree_mois']) ? $contrat['duree_mois'] . ' mois' : 'Non spécifiée'; ?>
                                                     </p>
                                                 </div>
                                             </div>
@@ -325,7 +325,7 @@ function formaterDate($date, $format = 'd/m/Y') {
                                                 <div class="timeline-item">
                                                     <div class="d-flex justify-content-between">
                                                         <span class="fw-bold">Création du paiement</span>
-                                                        <span class="text-muted small"><?php echo formaterDate($paiement['created_at'], 'd/m/Y H:i'); ?></span>
+                                                        <span class="text-muted small"><?php echo !empty($paiement['created_at']) ? formaterDate($paiement['created_at'], 'd/m/Y H:i') : 'Date inconnue'; ?></span>
                                                     </div>
                                                     <div class="text-muted small">
                                                         Paiement enregistré dans le système
@@ -336,7 +336,7 @@ function formaterDate($date, $format = 'd/m/Y') {
                                                     <div class="timeline-item">
                                                         <div class="d-flex justify-content-between">
                                                             <span class="fw-bold">Dernière modification</span>
-                                                            <span class="text-muted small"><?php echo formaterDate($paiement['updated_at'], 'd/m/Y H:i'); ?></span>
+                                                            <span class="text-muted small"><?php echo !empty($paiement['updated_at']) ? formaterDate($paiement['updated_at'], 'd/m/Y H:i') : 'Date inconnue'; ?></span>
                                                         </div>
                                                         <div class="text-muted small">
                                                             Dernière mise à jour des informations du paiement
@@ -350,7 +350,9 @@ function formaterDate($date, $format = 'd/m/Y') {
                                                             <span class="fw-bold">Paiement validé</span>
                                                             <span class="text-muted small">
                                                                 <?php 
-                                                                    $dateValidation = !empty($paiement['date_validation']) ? $paiement['date_validation'] : $paiement['updated_at'];
+                                                                    $dateValidation = !empty($paiement['date_validation']) 
+                                                                        ? $paiement['date_validation'] 
+                                                                        : ($paiement['updated_at'] ?? $paiement['created_at'] ?? date('Y-m-d H:i:s'));
                                                                     echo formaterDate($dateValidation, 'd/m/Y H:i'); 
                                                                 ?>
                                                             </span>
@@ -401,7 +403,7 @@ function formaterDate($date, $format = 'd/m/Y') {
                                         <?php echo htmlspecialchars($appartement['code_postal'] . ' ' . $appartement['ville']); ?>
                                     </div>
                                     <div class="text-muted small">
-                                        Loyer: <?php echo formatMontant($contrat['montant_loyer']); ?> / mois
+                                        Loyer: <?php echo formatMontant($contrat['loyer_mensuel'] ?? 0); ?> / mois
                                     </div>
                                 </div>
                             </div>
@@ -483,6 +485,6 @@ function formaterDate($date, $format = 'd/m/Y') {
     </div>
 
     <?php include("footer.php"); ?>
-    <?php include("scripts.php"); ?>
+    <?php include(__DIR__ . "/../includes/scripts.php"); ?>
 </body>
 </html>

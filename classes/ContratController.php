@@ -13,6 +13,8 @@ class ContratController {
     public function __construct() {
         $this->db = Database::connect();
     }
+    
+
 
     /**
      * Liste les contrats avec possibilité de filtrage par statut
@@ -24,11 +26,11 @@ class ContratController {
             $query = "SELECT c.*, 
                              l.nom as locataire_nom, l.prenom as locataire_prenom,
                              a.numero as appartement_numero, a.adresse as appartement_adresse,
-                             CONCAT(l.prenom, ' ', l.nom) as locataire_complet,
-                             CONCAT(a.adresse, ' (', a.code_postal, ' ', a.ville, ')') as adresse_complete
+                             CONCAT(COALESCE(l.prenom, ''), ' ', COALESCE(l.nom, '')) as locataire_complet,
+                             CONCAT(COALESCE(a.adresse, ''), ' (', COALESCE(a.code_postal, ''), ' ', COALESCE(a.ville, ''), ')') as adresse_complete
                       FROM contrats c
-                      JOIN locataires l ON c.locataire_id = l.id
-                      JOIN appartements a ON c.appartement_id = a.id
+                      LEFT JOIN locataires l ON c.id_locataire = l.id
+                      LEFT JOIN appartements a ON c.id_appartement = a.id
                       WHERE 1=1";
             
             $params = [];
@@ -37,6 +39,9 @@ class ContratController {
             if (!empty($filtres['statut'])) {
                 $query .= " AND c.statut = :statut";
                 $params[':statut'] = $filtres['statut'];
+            } else {
+                // Par défaut, on ne montre pas les contrats résiliés
+                $query .= " AND (c.statut IS NULL OR c.statut != 'resilie')";
             }
             
             $query .= " ORDER BY c.date_debut DESC";
@@ -148,7 +153,7 @@ class ContratController {
             // Vérifier si l'appartement est déjà loué pour la période (sauf pour le contrat actuel)
             $queryCheck = "SELECT id FROM contrats 
                           WHERE id != :id
-                          AND appartement_id = :appartement_id 
+                          AND id_appartement = :id_appartement 
                           AND ((date_debut BETWEEN :date_debut AND :date_fin) 
                           OR (date_fin BETWEEN :date_debut AND :date_fin)
                           OR (date_debut <= :date_debut AND date_fin >= :date_fin))";
@@ -156,7 +161,7 @@ class ContratController {
             $stmtCheck = $this->db->prepare($queryCheck);
             $stmtCheck->execute([
                 ':id' => $id,
-                ':appartement_id' => $donnees['id_appartement'],
+                ':id_appartement' => $donnees['id_appartement'],
                 ':date_debut' => $donnees['date_debut'],
                 ':date_fin' => $donnees['date_fin']
             ]);
@@ -173,7 +178,7 @@ class ContratController {
                         date_fin = :date_fin,
                         loyer = :loyer,
                         depot_garantie = :depot_garantie,
-                        date_modification = NOW()
+                        updated_at = NOW()
                       WHERE id = :id";
             
             $stmt = $this->db->prepare($query);
@@ -248,20 +253,43 @@ class ContratController {
                 throw new Exception("Erreur lors de la mise à jour du contrat");
             }
             
-            // 3. Mettre à jour le statut de l'appartement
+            // 3. Vérifier s'il y a d'autres contrats actifs pour cet appartement
             if (!empty($contrat['appartement_id'])) {
-                $queryAppartement = "UPDATE appartements 
-                                   SET statut = 'libre', 
-                                       updated_at = NOW() 
-                                   WHERE id = :appartement_id";
-                
-                $stmtAppartement = $this->db->prepare($queryAppartement);
-                $resultAppartement = $stmtAppartement->execute([
-                    ':appartement_id' => $contrat['appartement_id']
+                $queryCheckOtherContracts = "SELECT COUNT(*) as nb_contrats FROM contrats 
+                                         WHERE id_appartement = :appartement_id 
+                                         AND id != :current_id
+                                         AND statut = 'en_cours'";
+                $stmtCheck = $this->db->prepare($queryCheckOtherContracts);
+                $stmtCheck->execute([
+                    ':appartement_id' => $contrat['appartement_id'],
+                    ':current_id' => $id
                 ]);
+                $resultCheck = $stmtCheck->fetch(PDO::FETCH_ASSOC);
                 
-                if (!$resultAppartement) {
-                    throw new Exception("Erreur lors de la mise à jour du statut de l'appartement");
+                // Mettre à jour le statut de l'appartement uniquement s'il n'y a plus de contrats actifs
+                if ($resultCheck && $resultCheck['nb_contrats'] == 0) {
+                    $queryAppartement = "UPDATE appartements 
+                                       SET statut = 'libre', 
+                                           updated_at = NOW() 
+                                       WHERE id = :appartement_id";
+                    
+                    $stmtAppartement = $this->db->prepare($queryAppartement);
+                    $resultAppartement = $stmtAppartement->execute([
+                        ':appartement_id' => $contrat['appartement_id']
+                    ]);
+                    
+                    if (!$resultAppartement) {
+                        throw new Exception("Erreur lors de la mise à jour du statut de l'appartement");
+                    }
+                } else if ($resultCheck && $resultCheck['nb_contrats'] > 0) {
+                    // S'assurer que le statut reste 'loué' s'il y a d'autres contrats actifs
+                    $queryAppartement = "UPDATE appartements 
+                                       SET statut = 'loue', 
+                                           updated_at = NOW() 
+                                       WHERE id = :appartement_id";
+                    
+                    $stmtAppartement = $this->db->prepare($queryAppartement);
+                    $stmtAppartement->execute([':appartement_id' => $contrat['appartement_id']]);
                 }
             }
             
@@ -503,26 +531,49 @@ class ContratController {
         try {
             $this->db->beginTransaction();
             
-            // Vérifier d'abord si le contrat existe
-            $contrat = $this->getContrat($id);
-            if (!$contrat) {
-                throw new Exception("Le contrat #$id n'existe pas");
+            // 1. Récupérer l'ID de l'appartement avant suppression
+            $queryGetAppartement = "SELECT id_appartement FROM contrats WHERE id = :id";
+            $stmtGet = $this->db->prepare($queryGetAppartement);
+            $stmtGet->execute([':id' => $id]);
+            $result = $stmtGet->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$result) {
+                throw new Exception("Contrat introuvable");
             }
             
-            // Vérifier s'il y a des paiements associés
+            $appartementId = $result['id_appartement'];
+            
+            // 2. Vérifier s'il y a des paiements associés
             $queryCheckPaiements = "SELECT COUNT(*) as nb_paiements FROM paiements WHERE contrat_id = :contrat_id";
             $stmt = $this->db->prepare($queryCheckPaiements);
             $stmt->execute([':contrat_id' => $id]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $resultPaiements = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($result && $result['nb_paiements'] > 0) {
+            if ($resultPaiements && $resultPaiements['nb_paiements'] > 0) {
                 throw new Exception("Impossible de supprimer le contrat #$id car il y a des paiements associés");
             }
             
-            // Supprimer les éventuelles entrées liées dans d'autres tables
-            // Exemple : $this->supprimerDocumentsContrat($id);
+            // 3. Archiver le contrat avant suppression
+            $queryArchive = "
+                INSERT INTO contrats_archives (
+                    id, locataire_id, appartement_id, date_debut, date_fin, 
+                    loyer_mensuel, charges_mensuelles, depot_garantie, statut, 
+                    date_creation, date_suppression, raison_suppression, supprime_par
+                ) 
+                SELECT 
+                    c.id, c.id_locataire, c.id_appartement, c.date_debut, c.date_fin, 
+                    c.loyer_mensuel, c.charges_mensuelles, c.caution, c.statut, 
+                    c.date_creation, NOW(), 'Suppression manuelle', :user_id
+                FROM contrats c 
+                WHERE c.id = :id";
             
-            // Supprimer le contrat
+            $stmt = $this->db->prepare($queryArchive);
+            $stmt->execute([
+                ':id' => $id,
+                ':user_id' => $_SESSION['user_id'] ?? null
+            ]);
+            
+            // 4. Supprimer le contrat
             $queryDelete = "DELETE FROM contrats WHERE id = :id";
             $stmt = $this->db->prepare($queryDelete);
             $result = $stmt->execute([':id' => $id]);
@@ -530,6 +581,27 @@ class ContratController {
             if (!$result) {
                 throw new Exception("Erreur lors de la suppression du contrat #$id");
             }
+            
+            // 5. Vérifier s'il reste des contrats actifs pour cet appartement
+            $queryCheck = "SELECT COUNT(*) as nb_contrats 
+                          FROM contrats 
+                          WHERE id_appartement = :appartement_id 
+                          AND (date_fin >= CURDATE() OR date_fin IS NULL)";
+            
+            $stmtCheck = $this->db->prepare($queryCheck);
+            $stmtCheck->execute([':appartement_id' => $appartementId]);
+            $resultCheck = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+            
+            $hasActiveContract = ($resultCheck && $resultCheck['nb_contrats'] > 0);
+            
+            // 6. Mettre à jour le statut de l'appartement
+            $newStatus = $hasActiveContract ? 'loue' : 'libre';
+            $queryUpdate = "UPDATE appartements SET statut = :statut WHERE id = :id";
+            $stmtUpdate = $this->db->prepare($queryUpdate);
+            $stmtUpdate->execute([
+                ':statut' => $newStatus,
+                ':id' => $appartementId
+            ]);
             
             $this->db->commit();
             return true;

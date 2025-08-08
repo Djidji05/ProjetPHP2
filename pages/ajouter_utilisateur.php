@@ -33,17 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["enregistrer"])) {
   <!-- End Header -->
 
   <!-- ======= Sidebar ======= -->
-  <aside id="sidebar" class="sidebar">
-    <ul class="sidebar-nav" id="sidebar-nav">
-      <li class="nav-item">
-        <a class="nav-link" href="dashboard.php">
-          <i class="bi bi-grid"></i>
-          <span>Tableau de bord</span>
-        </a>
-      </li>
-      <?php include("menu.php"); ?>
-    </ul>
-  </aside>
+  <?php include("sidebar.php"); ?>
   <!-- End Sidebar -->
 
   <main id="main" class="main">
@@ -82,10 +72,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["enregistrer"])) {
                   <input type="email" class="form-control" placeholder="Email" name="email" required>
                 </div>
                 <div class="col-md-6">
-                  <select class="form-select" name="sexe" required>
-                    <option selected disabled>Sexe</option>
-                    <option>Masculin</option>
-                    <option>Feminin</option>
+                  <label for="sexe" class="form-label">Sexe *</label>
+                  <select class="form-select" id="sexe" name="sexe" required>
+                    <option value="" disabled selected>Sélectionnez un genre</option>
+                    <option value="H">Homme</option>
+                    <option value="F">Femme</option>
+                    <option value="Autre">Autre</option>
                   </select>
                 </div>
                 <div class="col-md-6">

@@ -2,12 +2,11 @@
 
 namespace anacaona;
 
-// Inclure manuellement TCPDF
-if (!class_exists('TCPDF')) {
-    require_once __DIR__ . '/../includes/tcpdf_autoload.php';
-}
+// Inclure DomPDF
+require_once __DIR__ . '/../includes/dompdf/dompdf/autoload.inc.php';
 
-use TCPDF;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class PdfGenerator {
     /**
@@ -19,84 +18,131 @@ class PdfGenerator {
      */
     public static function genererContratPdf($contrat, $output = 'I') {
         try {
-            // Créer une nouvelle instance de TCPDF
-            $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+            // Options de configuration de DomPDF
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', true);
             
-            // Définir les informations du document
-            $pdf->SetCreator('ANACAONA Gestion Locative');
-            $pdf->SetAuthor('ANACAONA');
-            $pdf->SetTitle('Contrat de location #' . $contrat['id']);
-            $pdf->SetSubject('Contrat de location');
+            // Créer une nouvelle instance de DomPDF
+            $pdf = new Dompdf($options);
             
-            // Supprimer l'en-tête et le pied de page par défaut
-            $pdf->setPrintHeader(false);
-            $pdf->setPrintFooter(false);
+            // HTML du document
+            $html = '<!DOCTYPE html>
+            <html>
+            <head>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+                <title>Contrat de location #' . htmlspecialchars($contrat['id']) . '</title>
+                <style>
+                    body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
+                    h1 { text-align: center; font-size: 18px; margin-bottom: 20px; }
+                    .info-section { margin-bottom: 15px; }
+                    .info-label { font-weight: bold; }
+                    .section-title { font-size: 14px; font-weight: bold; margin: 15px 0 10px 0; border-bottom: 1px solid #ccc; }
+                </style>
+            </head>
+            <body>
+                <h1>CONTRAT DE LOCATION</h1>
+                
+                <div class="info-section">
+                    <p><span class="info-label">Référence :</span> ' . htmlspecialchars($contrat['reference'] ?? 'N/A') . '</p>
+                    <p><span class="info-label">Date de début :</span> ' . date('d/m/Y', strtotime($contrat['date_debut'])) . '</p>
+                    <p><span class="info-label">Date de fin :</span> ' . date('d/m/Y', strtotime($contrat['date_fin'])) . '</p>
+                </div>';
             
-            // Ajouter une page
-            $pdf->AddPage();
-            
-            // Définir la police
-            $pdf->SetFont('helvetica', '', 12);
-            
-            // Titre du document
-            $pdf->SetFont('helvetica', 'B', 16);
-            $pdf->Cell(0, 10, 'CONTRAT DE LOCATION', 0, 1, 'C');
-            $pdf->Ln(10);
-            
-            // Informations du contrat
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'Référence : ' . htmlspecialchars($contrat['reference'] ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 10, 'Date de début : ' . date('d/m/Y', strtotime($contrat['date_debut'])), 0, 1);
-            $pdf->Cell(0, 10, 'Date de fin : ' . date('d/m/Y', strtotime($contrat['date_fin'])), 0, 1);
-            $pdf->Ln(10);
-            
-            // Informations du locataire
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'LOCATAIRE', 0, 1);
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->Cell(0, 7, htmlspecialchars(($contrat['locataire_prenom'] ?? '') . ' ' . ($contrat['locataire_nom'] ?? '')), 0, 1);
-            if (!empty($contrat['locataire_email'])) {
-                $pdf->Cell(0, 7, htmlspecialchars($contrat['locataire_email']), 0, 1);
+            // Ajouter les informations du locataire si disponibles
+            if (isset($contrat['locataire_nom']) || isset($contrat['locataire_prenom'])) {
+                $html .= '
+                <div class="section-title">INFORMATIONS DU LOCATAIRE</div>
+                <div class="info-section">
+                    <p><span class="info-label">Nom :</span> ' . htmlspecialchars(($contrat['locataire_nom'] ?? '') . ' ' . ($contrat['locataire_prenom'] ?? '')) . '</p>';
+                
+                if (isset($contrat['locataire_email'])) {
+                    $html .= '<p><span class="info-label">Email :</span> ' . htmlspecialchars($contrat['locataire_email']) . '</p>';
+                }
+                
+                if (isset($contrat['locataire_telephone'])) {
+                    $html .= '<p><span class="info-label">Téléphone :</span> ' . htmlspecialchars($contrat['locataire_telephone']) . '</p>';
+                }
+                
+                $html .= '</div>';
             }
-            if (!empty($contrat['locataire_telephone'])) {
-                $pdf->Cell(0, 7, htmlspecialchars($contrat['locataire_telephone']), 0, 1);
-            }
-            $pdf->Ln(10);
             
-            // Informations de l'appartement
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'APPARTEMENT', 0, 1);
-            $pdf->SetFont('helvetica', '', 12);
-            if (!empty($contrat['appartement_adresse'])) {
-                $pdf->Cell(0, 7, htmlspecialchars($contrat['appartement_adresse']), 0, 1);
+            // Ajouter les informations de l'appartement si disponibles
+            if (isset($contrat['appartement_adresse']) || isset($contrat['appartement_ville'])) {
+                $html .= '
+                <div class="section-title">INFORMATIONS DU BIEN LOUÉ</div>
+                <div class="info-section">
+                    <p><span class="info-label">Adresse :</span> ' . 
+                       htmlspecialchars(($contrat['appartement_adresse'] ?? '') . ', ' . 
+                                     ($contrat['appartement_code_postal'] ?? '') . ' ' . 
+                                     ($contrat['appartement_ville'] ?? '')) . '</p>';
+                
+                if (isset($contrat['loyer'])) {
+                    $html .= '<p><span class="info-label">Loyer mensuel :</span> ' . 
+                             number_format($contrat['loyer'], 2, ',', ' ') . ' €</p>';
+                }
+                
+                if (isset($contrat['charges'])) {
+                    $html .= '<p><span class="info-label">Charges :</span> ' . 
+                             number_format($contrat['charges'], 2, ',', ' ') . ' €</p>';
+                }
+                
+                if (isset($contrat['depot_garantie'])) {
+                    $html .= '<p><span class="info-label">Dépôt de garantie :</span> ' . 
+                             number_format($contrat['depot_garantie'], 2, ',', ' ') . ' €</p>';
+                }
+                
+                $html .= '</div>';
             }
-            if (!empty($contrat['appartement_code_postal']) || !empty($contrat['appartement_ville'])) {
-                $pdf->Cell(0, 7, htmlspecialchars(($contrat['appartement_code_postal'] ?? '') . ' ' . ($contrat['appartement_ville'] ?? '')), 0, 1);
-            }
-            if (!empty($contrat['appartement_surface'])) {
-                $pdf->Cell(0, 7, 'Surface : ' . htmlspecialchars($contrat['appartement_surface']) . ' m²', 0, 1);
-            }
-            $pdf->Ln(10);
             
-            // Conditions financières
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'CONDITIONS FINANCIÈRES', 0, 1);
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->Cell(0, 7, 'Loyer mensuel : ' . number_format($contrat['loyer'] ?? 0, 2, ',', ' ') . ' €', 0, 1);
-            $pdf->Cell(0, 7, 'Charges mensuelles : ' . number_format($contrat['appartement_charges'] ?? 0, 2, ',', ' ') . ' €', 0, 1);
-            $pdf->Cell(0, 7, 'Dépôt de garantie : ' . number_format($contrat['depot_garantie'] ?? 0, 2, ',', ' ') . ' €', 0, 1);
+            // Conditions générales
+            $html .= '
+                <div class="section-title">CONDITIONS GÉNÉRALES</div>
+                <div class="info-section">
+                    <ul style="list-style-type: none; padding-left: 0;">
+                        <li>• Durée du bail : ' . htmlspecialchars($contrat['duree_mois'] ?? 'N/A') . ' mois</li>
+                        <li>• Date d\'entrée : ' . date('d/m/Y', strtotime($contrat['date_debut'])) . '</li>
+                        <li>• Date de sortie prévue : ' . date('d/m/Y', strtotime($contrat['date_fin'])) . '</li>
+                        <li>• Loyer payable le premier jour de chaque mois</li>
+                        <li>• Charges comprises : ' . (isset($contrat['charges_comprises']) && $contrat['charges_comprises'] ? 'Oui' : 'Non') . '</li>
+                        <li>• État des lieux d\'entrée à établir à la remise des clés</li>
+                        <li>• Paiement par virement bancaire ou chèque</li>
+                        <li>• Indexation annuelle selon l\'indice de référence des loyers (IRL)</li>
+                    </ul>
+                </div>
+                
+                <div style="margin-top: 50px; text-align: center;">
+                    <p>Fait à _________________________________________________</p>
+                    <p>Le ' . date('d/m/Y') . '</p>
+                </div>
+                
+                <div style="margin-top: 80px; text-align: right;">
+                    <p>Signature du locataire</p>
+                    <p>________________________</p>
+                </div>';
+                
+            // Fermer le HTML
+            $html .= '
+            </body>
+            </html>';
             
-            // Date et signature
-            $pdf->Ln(20);
-            $pdf->Cell(0, 7, 'Fait à ____________________, le ' . date('d/m/Y'), 0, 1, 'R');
-            $pdf->Ln(15);
-            $pdf->Cell(0, 7, 'Signature du locataire', 0, 1, 'R');
-            $pdf->Cell(0, 7, '________________________', 0, 1, 'R');
+            // Charger le contenu HTML
+            $pdf->loadHtml($html, 'UTF-8');
             
-            // Si on doit sauvegarder le fichier
-            if ($output !== 'I') {
+            // Définir la taille et l'orientation du papier
+            $pdf->setPaper('A4', 'portrait');
+            
+            // Rendre le PDF
+            $pdf->render();
+            
+            // Gérer la sortie
+            if ($output === 'I') {
+                // Afficher dans le navigateur
+                $pdf->stream("contrat_location_" . $contrat['id'] . ".pdf", ["Attachment" => false]);
+                return true;
+            } else {
                 // Créer le dossier de destination s'il n'existe pas
-                $dossierPdf = dirname(__DIR__) . '/pdf';
+                $dossierPdf = dirname(dirname(__DIR__)) . '/pdf';
                 if (!file_exists($dossierPdf)) {
                     mkdir($dossierPdf, 0777, true);
                 }
@@ -105,17 +151,12 @@ class PdfGenerator {
                 $nomFichier = 'contrat_' . $contrat['id'] . '_' . date('Ymd_His') . '.pdf';
                 $cheminComplet = $dossierPdf . '/' . $nomFichier;
                 
-                // Sauvegarder le PDF
-                $pdf->Output($cheminComplet, 'F');
+                // Enregistrer le fichier
+                file_put_contents($cheminComplet, $pdf->output());
                 return $cheminComplet;
-            } else {
-                // Afficher directement dans le navigateur
-                $pdf->Output('contrat_' . $contrat['id'] . '.pdf', 'I');
-                return true;
             }
-            
         } catch (\Exception $e) {
-            error_log("Erreur lors de la génération du PDF du contrat #" . ($contrat['id'] ?? 'inconnu') . ": " . $e->getMessage());
+            error_log("Erreur lors de la génération du PDF : " . $e->getMessage());
             return false;
         }
     }
