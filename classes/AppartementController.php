@@ -34,7 +34,7 @@ class AppartementController {
                              p.prenom as proprietaire_prenom,
                              CONCAT(a.adresse, ', ', a.code_postal, ' ', a.ville) as adresse_complete
                       FROM appartements a
-                      LEFT JOIN proprietaires p ON a.id_proprietaire = p.id
+                      LEFT JOIN proprietaires p ON a.proprietaire_id = p.id
                       ORDER BY a.ville, a.adresse";
             
             $stmt = $this->db->prepare($query);
@@ -74,7 +74,7 @@ class AppartementController {
                       FROM 
                         appartements a
                       LEFT JOIN 
-                        proprietaires p ON a.id_proprietaire = p.id
+                        proprietaires p ON a.proprietaire_id = p.id
                       WHERE 
                         a.id NOT IN (
                             SELECT DISTINCT id_appartement 
@@ -142,6 +142,34 @@ class AppartementController {
     }
 
     /**
+     * Vérifie si un appartement a des contrats actifs
+     * 
+     * @param int $appartementId L'ID de l'appartement à vérifier
+     * @return bool True si l'appartement a des contrats actifs, false sinon
+     */
+    public function checkAppartementHasActiveContracts($appartementId) {
+        try {
+            $query = "SELECT COUNT(*) as count FROM contrats 
+                     WHERE id_appartement = :appartement_id 
+                     AND (date_fin > CURDATE() OR date_fin IS NULL)
+                     AND statut = 'en_cours'";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            return $result && $result['count'] > 0;
+            
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la vérification des contrats actifs pour l'appartement $appartementId: " . $e->getMessage());
+            // En cas d'erreur, on considère qu'il y a des contrats actifs pour éviter les suppressions accidentelles
+            return true;
+        }
+    }
+    
+    /**
      * Récupère un appartement par son ID
      * 
      * @param int $id L'ID de l'appartement à récupérer
@@ -156,7 +184,7 @@ class AppartementController {
                         p.prenom as proprietaire_prenom,
                         p.email as proprietaire_email, 
                         p.telephone as proprietaire_telephone,
-                        a.id_proprietaire as proprietaire_id,
+                        a.proprietaire_id,
                         a.pieces as nombre_pieces,
                         1 as chambres,  -- Valeur par défaut
                         0 as depot_garantie,  -- Valeur par défaut
@@ -172,7 +200,7 @@ class AppartementController {
                         'Aucune description disponible' as description,  -- Valeur par défaut
                         'Non spécifiée' as date_construction  -- Valeur par défaut
                       FROM appartements a
-                      LEFT JOIN proprietaires p ON a.id_proprietaire = p.id
+                      LEFT JOIN proprietaires p ON a.proprietaire_id = p.id
                       WHERE a.id = :id";
             
             $stmt = $this->db->prepare($query);
@@ -243,38 +271,7 @@ class AppartementController {
         }
     }
     
-    /**
-     * Récupère la liste des appartements disponibles à la location
-     * 
-     * @return array Liste des appartements disponibles
-     */
-    /**
-     * Vérifie si un appartement a des contrats actifs
-     * 
-     * @param int $appartementId L'ID de l'appartement à vérifier
-     * @return bool True si l'appartement a des contrats actifs, false sinon
-     */
-    public function checkAppartementHasActiveContracts($appartementId) {
-        try {
-            $query = "SELECT COUNT(*) as count FROM contrats 
-                     WHERE id_appartement = :appartement_id 
-                     AND statut = 'en_cours'
-                     AND (date_fin IS NULL OR date_fin >= CURDATE())";
-            
-            $stmt = $this->db->prepare($query);
-            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
-            $stmt->execute();
-            
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            return ($result && $result['count'] > 0);
-            
-        } catch (PDOException $e) {
-            error_log("Erreur lors de la vérification des contrats actifs: " . $e->getMessage());
-            return true; // Par sécurité, on considère qu'il y a des contrats actifs en cas d'erreur
-        }
-    }
-    
+
     /**
      * Supprime un appartement et ses photos associées
      * 
@@ -297,7 +294,28 @@ class AppartementController {
             $this->db->beginTransaction();
             
             try {
-                // 1. Supprimer les photos de l'appartement
+                // Désactiver temporairement les contraintes de clé étrangère
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=0');
+                
+                // 1. Supprimer les paiements associés aux contrats de l'appartement
+                error_log("Suppression des paiements associés aux contrats de l'appartement #$appartementId");
+                $queryDeletePaiements = "DELETE p FROM paiements p 
+                                      INNER JOIN contrats c ON p.contrat_id = c.id 
+                                      WHERE c.id_appartement = :appartement_id";
+                $stmtPaiements = $this->db->prepare($queryDeletePaiements);
+                $stmtPaiements->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+                $paiementsDeleted = $stmtPaiements->execute();
+                error_log("Paiements supprimés : " . ($paiementsDeleted ? 'oui' : 'non') . ", lignes affectées : " . $stmtPaiements->rowCount());
+                
+                // 2. Supprimer les contrats associés à l'appartement
+                error_log("Suppression des contrats de l'appartement #$appartementId");
+                $queryDeleteContrats = "DELETE FROM contrats WHERE id_appartement = :appartement_id";
+                $stmtContrats = $this->db->prepare($queryDeleteContrats);
+                $stmtContrats->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+                $contratsDeleted = $stmtContrats->execute();
+                error_log("Contrats supprimés : " . ($contratsDeleted ? 'oui' : 'non') . ", lignes affectées : " . $stmtContrats->rowCount());
+                
+                // 3. Supprimer les photos de l'appartement
                 error_log("Suppression des photos de l'appartement #$appartementId");
                 $queryDeletePhotos = "DELETE FROM photos_appartement WHERE appartement_id = :appartement_id";
                 $stmtPhotos = $this->db->prepare($queryDeletePhotos);
@@ -305,7 +323,7 @@ class AppartementController {
                 $photosDeleted = $stmtPhotos->execute();
                 error_log("Photos supprimées : " . ($photosDeleted ? 'oui' : 'non') . ", lignes affectées : " . $stmtPhotos->rowCount());
                 
-                // 2. Supprimer l'appartement
+                // 4. Supprimer l'appartement
                 error_log("Suppression de l'appartement #$appartementId");
                 $queryDeleteAppartement = "DELETE FROM appartements WHERE id = :id";
                 $stmtAppartement = $this->db->prepare($queryDeleteAppartement);
@@ -313,6 +331,9 @@ class AppartementController {
                 $result = $stmtAppartement->execute();
                 $rowsAffected = $stmtAppartement->rowCount();
                 error_log("Résultat de la suppression : " . ($result ? 'succès' : 'échec') . ", lignes affectées : $rowsAffected");
+                
+                // Réactiver les contraintes de clé étrangère
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
                 
                 if ($result && $rowsAffected > 0) {
                     $this->db->commit();
@@ -327,6 +348,8 @@ class AppartementController {
                 }
                 
             } catch (PDOException $e) {
+                // S'assurer que les contraintes sont réactivées même en cas d'erreur
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
                 $this->db->rollBack();
                 error_log("Erreur PDO lors de la suppression de l'appartement #$appartementId: " . $e->getMessage());
                 error_log("Trace de l'erreur : " . $e->getTraceAsString());
@@ -352,12 +375,22 @@ class AppartementController {
         try {
             $this->db->beginTransaction();
             
+            // Journalisation des données reçues
+            error_log("Données reçues pour l'ajout d'appartement : " . print_r($data, true));
+            
             // Validation des champs obligatoires
             $requiredFields = ['adresse', 'surface', 'loyer', 'charges', 'pieces', 'proprietaire_id'];
+            $missingFields = [];
             foreach ($requiredFields as $field) {
                 if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
-                    throw new Exception("Le champ " . str_replace('_', ' ', $field) . " est obligatoire");
+                    $missingFields[] = $field;
                 }
+            }
+            
+            if (!empty($missingFields)) {
+                throw new Exception("Les champs suivants sont obligatoires : " . implode(', ', array_map(function($f) { 
+                    return str_replace('_', ' ', $f); 
+                }, $missingFields)));
             }
             
             // Nettoyage et validation des entrées
@@ -385,7 +418,23 @@ class AppartementController {
                 throw new Exception("Les charges ne peuvent pas être négatives");
             }
             
-            // Préparation de la requête d'insertion
+            // Préparation de la requête d'insertion avec vérification des colonnes
+            $columns = [
+                'numero', 'adresse', 'complement_adresse', 'code_postal', 'ville',
+                'type', 'surface', 'pieces', 'chambres', 'etage',
+                'loyer', 'charges', 'depot_garantie', 'description',
+                'equipements', 'annee_construction', 'proprietaire_id',
+                'statut', 'ascenseur', 'balcon', 'terrasse', 'jardin', 'cave', 'parking',
+                'date_creation', 'date_mise_a_jour'
+            ];
+            
+            // Journalisation des colonnes
+            error_log("Colonnes à insérer : " . implode(', ', $columns));
+            
+            // Vérification de la structure de la table
+            $tableInfo = $this->getTableStructure();
+            error_log("Structure de la table : " . print_r($tableInfo, true));
+            
             $query = "INSERT INTO appartements (
                 numero, adresse, complement_adresse, code_postal, ville, 
                 type, surface, pieces, chambres, etage, 
@@ -447,13 +496,42 @@ class AppartementController {
             if (!empty($photos) && is_array($photos)) {
                 foreach ($photos as $photo) {
                     if (!empty($photo['chemin'])) {
-                        $this->ajouterPhoto([
-                            'name' => basename($photo['chemin']),
-                            'tmp_name' => '../' . $photo['chemin'],
-                            'type' => mime_content_type('../' . $photo['chemin']),
-                            'size' => filesize('../' . $photo['chemin']),
-                            'error' => UPLOAD_ERR_OK
-                        ], $appartementId, isset($photo['est_principale']) && $photo['est_principale']);
+                        // Vérifier si le fichier existe
+                        $filePath = __DIR__ . '/../' . ltrim($photo['chemin'], '/');
+                        if (file_exists($filePath)) {
+                            // Insérer directement dans la base de données sans déplacer le fichier
+                            $query = "INSERT INTO photos_appartement 
+                                     (appartement_id, chemin, type_mime, taille, est_principale) 
+                                     VALUES (:appartement_id, :chemin, :type_mime, :taille, :est_principale)";
+                            
+                            $stmt = $this->db->prepare($query);
+                            $isMain = isset($photo['est_principale']) && $photo['est_principale'] ? 1 : 0;
+                            
+                            // Si c'est la première photo et qu'aucune photo principale n'existe, la définir comme principale
+                            if ($isMain === 0 && !$this->hasMainPhoto($appartementId)) {
+                                $isMain = 1;
+                            }
+                            
+                            // S'assurer que le chemin commence par 'uploads/appartements/'
+                            $cheminPhoto = $photo['chemin'];
+                            if (strpos($cheminPhoto, 'uploads/') !== 0) {
+                                $cheminPhoto = 'uploads/' . ltrim($cheminPhoto, '/');
+                            }
+                            
+                            $result = $stmt->execute([
+                                ':appartement_id' => $appartementId,
+                                ':chemin' => $cheminPhoto,
+                                ':type_mime' => mime_content_type($filePath),
+                                ':taille' => filesize($filePath),
+                                ':est_principale' => $isMain
+                            ]);
+                            
+                            if (!$result) {
+                                error_log("Erreur lors de l'insertion de la photo dans la base de données");
+                            }
+                        } else {
+                            error_log("Le fichier photo n'existe pas : " . $filePath);
+                        }
                     }
                 }
             }
@@ -744,36 +822,7 @@ class AppartementController {
         return $this->db->lastInsertId();
     }
     
-    /**
-     * Affiche la structure de la table appartements
-     * 
-     * @return array La structure de la table
-     */
-    public function getTableStructure() {
-        try {
-            $tables = $this->db->query("SHOW TABLES LIKE 'appartements'")->fetchAll();
-            if (count($tables) === 0) {
-                return ['error' => "La table 'appartements' n'existe pas"];
-            }
-            
-            // Récupérer la structure de la table
-            $structure = $this->db->query("DESCRIBE appartements")->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Récupérer un exemple d'enregistrement
-            $example = $this->db->query("SELECT * FROM appartements LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-            
-            // Compter le nombre total d'enregistrements
-            $count = $this->db->query("SELECT COUNT(*) as count FROM appartements")->fetch(PDO::FETCH_ASSOC);
-            
-            return [
-                'structure' => $structure,
-                'example' => $example,
-                'count' => $count['count']
-            ];
-        } catch (PDOException $e) {
-            return ['error' => $e->getMessage()];
-        }
-    }
+
     
     /**
      * Ajoute une photo à un appartement
@@ -786,11 +835,15 @@ class AppartementController {
     public function ajouterPhoto($fileInfo, $appartementId = null, $isMain = false) {
         if ($appartementId === null) {
             $appartementId = $this->getLastInsertedId();
+            if (!$appartementId) {
+                error_log("Impossible de déterminer l'ID de l'appartement");
+                return false;
+            }
         }
         
         if (empty($fileInfo) || $fileInfo['error'] !== UPLOAD_ERR_OK) {
             error_log("Erreur lors du téléchargement du fichier: " . 
-                     ($fileInfo['error'] ?? 'inconnue'));
+                    ($fileInfo['error'] ?? 'inconnue'));
             return false;
         }
         
@@ -802,14 +855,17 @@ class AppartementController {
         }
         
         // Créer le dossier d'upload s'il n'existe pas
-        $uploadDir = __DIR__ . '/../uploads/';
+        $uploadDir = __DIR__ . '/../uploads/appartements/';
         if (!file_exists($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
+            if (!mkdir($uploadDir, 0777, true)) {
+                error_log("Impossible de créer le répertoire d'upload: $uploadDir");
+                return false;
+            }
         }
         
         // Générer un nom de fichier unique
         $extension = pathinfo($fileInfo['name'], PATHINFO_EXTENSION);
-        $filename = uniqid('photo_') . '.' . $extension;
+        $filename = uniqid('img_') . '_' . uniqid() . '.' . $extension;
         $targetPath = $uploadDir . $filename;
         
         // Déplacer le fichier uploadé
@@ -819,21 +875,152 @@ class AppartementController {
                 $isMain = true;
             }
             
+            // Préparer le chemin pour la base de données
+            $dbPath = 'uploads/appartements/' . $filename;
+            
             // Insérer l'entrée dans la base de données
             $query = "INSERT INTO photos_appartement 
                      (appartement_id, chemin, type_mime, taille, est_principale) 
-                     VALUES (?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($query);
+                     VALUES (:appartement_id, :chemin, :type_mime, :taille, :est_principale)";
             
-            return $stmt->execute([
-                $appartementId,
-                $filename,
-                $fileInfo['type'],
-                $fileInfo['size'],
-                $isMain ? 1 : 0
+            $stmt = $this->db->prepare($query);
+            $result = $stmt->execute([
+                ':appartement_id' => $appartementId,
+                ':chemin' => $dbPath,
+                ':type_mime' => $fileInfo['type'],
+                ':taille' => $fileInfo['size'],
+                ':est_principale' => $isMain ? 1 : 0
             ]);
+            
+            if ($result) {
+                error_log("Photo ajoutée avec succès: $dbPath");
+                return true;
+            } else {
+                // Supprimer le fichier si l'insertion en base a échoué
+                @unlink($targetPath);
+                $errorInfo = $stmt->errorInfo();
+                error_log("Échec de l'insertion en base de données: " . 
+                         ($errorInfo[2] ?? 'Erreur inconnue'));
+                return false;
+            }
+        } else {
+            error_log("Échec du déplacement du fichier uploadé vers: $targetPath");
+            return false;
         }
-        
-        return false;
+    }
+    
+    /**
+     * Récupère la structure de la table appartements et corrige les problèmes éventuels
+     * 
+     * @return array La structure de la table
+     */
+    /**
+     * Définit une photo comme photo principale pour un appartement
+     * 
+     * @param int $appartementId L'ID de l'appartement
+     * @param int $photoId L'ID de la photo à définir comme principale
+     * @return bool True si la mise à jour a réussi, false sinon
+     */
+    public function definirPhotoPrincipale($appartementId, $photoId) {
+        try {
+            // D'abord, réinitialiser toutes les photos de l'appartement pour qu'aucune ne soit principale
+            $resetQuery = "UPDATE photos_appartement 
+                          SET est_principale = 0 
+                          WHERE appartement_id = :appartement_id";
+            
+            $stmt = $this->db->prepare($resetQuery);
+            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+            $resetResult = $stmt->execute();
+            
+            if (!$resetResult) {
+                error_log("Erreur lors de la réinitialisation des photos principales pour l'appartement #$appartementId");
+                return false;
+            }
+            
+            // Ensuite, définir la photo spécifiée comme principale
+            $updateQuery = "UPDATE photos_appartement 
+                           SET est_principale = 1 
+                           WHERE id = :photo_id 
+                           AND appartement_id = :appartement_id";
+            
+            $stmt = $this->db->prepare($updateQuery);
+            $stmt->bindParam(':photo_id', $photoId, PDO::PARAM_INT);
+            $stmt->bindParam(':appartement_id', $appartementId, PDO::PARAM_INT);
+            $updateResult = $stmt->execute();
+            
+            if (!$updateResult) {
+                error_log("Erreur lors de la définition de la photo #$photoId comme principale pour l'appartement #$appartementId");
+                return false;
+            }
+            
+            return true;
+            
+        } catch (PDOException $e) {
+            error_log("Erreur PDO dans definirPhotoPrincipale: " . $e->getMessage());
+            return false;
+        } catch (Exception $e) {
+            error_log("Erreur dans definirPhotoPrincipale: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+
+    
+    
+    /**
+     * Récupère la structure de la table appartements et corrige les problèmes éventuels
+     * 
+     * @return array La structure de la table
+     */
+    public function getTableStructure() {
+        try {
+            $query = "SHOW COLUMNS FROM appartements";
+            $stmt = $this->db->query($query);
+            $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Vérifier si la colonne proprietaire_id existe
+            $hasProprietaireId = false;
+            foreach ($columns as $column) {
+                if ($column['Field'] === 'proprietaire_id') {
+                    $hasProprietaireId = true;
+                    break;
+                }
+            }
+            
+            // Si la colonne n'existe pas, on essaie de l'ajouter
+            if (!$hasProprietaireId) {
+                error_log("La colonne 'proprietaire_id' est manquante dans la table 'appartements'. Tentative d'ajout...");
+                try {
+                    // D'abord, vérifier si la colonne id_proprietaire existe
+                    $checkIdProprietaire = $this->db->query("SHOW COLUMNS FROM appartements LIKE 'id_proprietaire'")->fetch();
+                    
+                    if ($checkIdProprietaire) {
+                        // Si id_proprietaire existe, on la renomme en proprietaire_id
+                        $this->db->exec("ALTER TABLE appartements CHANGE COLUMN id_proprietaire proprietaire_id INT NULL DEFAULT NULL");
+                        error_log("Colonne 'id_proprietaire' renommée en 'proprietaire_id' avec succès.");
+                    } else {
+                        // Sinon, on ajoute la colonne proprietaire_id
+                        $alterQuery = "ALTER TABLE appartements 
+                                      ADD COLUMN proprietaire_id INT NULL DEFAULT NULL AFTER annee_construction,
+                                      ADD CONSTRAINT fk_appartement_proprietaire 
+                                      FOREIGN KEY (proprietaire_id) REFERENCES proprietaires(id) ON DELETE SET NULL";
+                        $this->db->exec($alterQuery);
+                        error_log("Colonne 'proprietaire_id' ajoutée avec succès à la table 'appartements'.");
+                    }
+                    
+                    // Recharger la structure de la table
+                    $stmt = $this->db->query($query);
+                    $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (PDOException $e) {
+                    error_log("Erreur lors de la modification de la structure de la table 'appartements' : " . $e->getMessage());
+                    // En cas d'échec, on essaie de continuer avec la structure actuelle
+                }
+            }
+            
+            return $columns;
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération de la structure de la table 'appartements' : " . $e->getMessage());
+            return [];
+        }
     }
 }

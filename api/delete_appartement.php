@@ -7,9 +7,9 @@ if (session_status() === PHP_SESSION_NONE) {
 // Définir l'en-tête de contenu JSON
 header('Content-Type: application/json');
 
-// Désactiver l'affichage des erreurs en production
-ini_set('display_errors', 0);
-error_reporting(0);
+// Activer l'affichage des erreurs pour le débogage
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 // Fonction pour envoyer une réponse JSON standardisée
 function sendJsonResponse($success, $message, $statusCode = 200) {
@@ -45,31 +45,60 @@ try {
     $appartementId = (int)$_GET['id'];
 
     // Inclure les fichiers nécessaires après les vérifications initiales
-    require_once '../includes/auth_check.php';
-    require_once '../classes/Database.php';
-    require_once '../classes/AppartementController.php';
+    $basePath = dirname(dirname(__FILE__));
+    require_once $basePath . '/includes/auth_check.php';
+    require_once $basePath . '/classes/Database.php';
+    require_once $basePath . '/classes/AppartementController.php';
+    
+    // Vérifier si les classes nécessaires existent
+    if (!class_exists('anacaona\\AppartementController')) {
+        error_log('Erreur: La classe AppartementController n\'a pas pu être chargée');
+        sendJsonResponse(false, 'Erreur de configuration du serveur', 500);
+    }
 
     // Initialiser le contrôleur d'appartement
     $appartementController = new anacaona\AppartementController();
     
-    // Vérifier d'abord si l'appartement a des contrats actifs
-    $hasActiveContracts = $appartementController->checkAppartementHasActiveContracts($appartementId);
-    
-    if ($hasActiveContracts) {
-        sendJsonResponse(false, 'Impossible de supprimer cet appartement car il a des contrats actifs.', 400);
-    }
-    
-    // Supprimer l'appartement
-    $result = $appartementController->deleteAppartement($appartementId);
-    
-    if ($result === true) {
-        sendJsonResponse(true, 'Appartement supprimé avec succès.');
-    } else if (is_string($result)) {
-        // Si un message d'erreur est retourné
-        sendJsonResponse(false, $result, 400);
-    } else {
-        // En cas d'échec sans message spécifique
-        sendJsonResponse(false, 'Une erreur est survenue lors de la suppression de l\'appartement', 500);
+    try {
+        // Vérifier d'abord si l'appartement existe
+        $appartement = $appartementController->getAppartementById($appartementId);
+        if (!$appartement) {
+            error_log("Tentative de suppression d'un appartement inexistant #$appartementId");
+            sendJsonResponse(false, "L'appartement spécifié n'existe pas.", 404);
+        }
+        
+        // Vérifier s'il y a des contrats actifs
+        $hasActiveContracts = $appartementController->checkAppartementHasActiveContracts($appartementId);
+        
+        if ($hasActiveContracts) {
+            error_log("Tentative de suppression de l'appartement #$appartementId avec des contrats actifs");
+            sendJsonResponse(false, 'Impossible de supprimer cet appartement car il a des contrats actifs.', 400);
+        }
+        
+        // Journalisation avant suppression
+        error_log("Tentative de suppression de l'appartement #$appartementId - Début du processus");
+        
+        // Supprimer l'appartement
+        $result = $appartementController->deleteAppartement($appartementId);
+        
+        if ($result === true) {
+            error_log("Appartement #$appartementId supprimé avec succès");
+            sendJsonResponse(true, 'Appartement supprimé avec succès.');
+        } else if (is_string($result)) {
+            // Si un message d'erreur est retourné
+            error_log("Erreur lors de la suppression de l'appartement #$appartementId: $result");
+            sendJsonResponse(false, $result, 400);
+        } else {
+            // En cas d'échec sans message spécifique
+            $errorMsg = 'Une erreur est survenue lors de la suppression de l\'appartement';
+            error_log("$errorMsg (ID: $appartementId)");
+            sendJsonResponse(false, $errorMsg, 500);
+        }
+        
+    } catch (Exception $e) {
+        error_log("Exception lors de la suppression de l'appartement #$appartementId: " . $e->getMessage());
+        error_log("Trace de l'erreur : " . $e->getTraceAsString());
+        sendJsonResponse(false, 'Une erreur est survenue lors de la suppression de l\'appartement.', 500);
     }
     
 } catch (Exception $e) {

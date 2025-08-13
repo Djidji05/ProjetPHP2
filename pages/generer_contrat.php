@@ -77,20 +77,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'locataire_id' => $_POST['id_locataire'],
             'date_debut' => $_POST['date_debut'],
             'date_fin' => $_POST['date_fin'],
-            'loyer_mensuel' => $_POST['loyer'],
+            'loyer' => $_POST['loyer'],
             'depot_garantie' => $_POST['depot_garantie'],
             'duree_mois' => calculerDureeMois($_POST['date_debut'], $_POST['date_fin']),
             'date_signature' => date('Y-m-d'),
             'date_effet' => $_POST['date_debut'],
             'statut' => 'en_cours',
-            'conditions_particulieres' => 'Créé via le formulaire web',
-            'proprietaire_id' => getProprietaireIdFromAppartement($_POST['id_appartement'])
+            'conditions_particulieres' => 'Créé via le formulaire web'
         ];
+        
+        // Journalisation pour le débogage
+        error_log("Données du contrat à enregistrer : " . print_r($donnees, true));
         
         // Valider les données requises
         if (empty($donnees['appartement_id']) || empty($donnees['locataire_id']) || 
             empty($donnees['date_debut']) || empty($donnees['date_fin']) || 
-            empty($donnees['loyer_mensuel'])) {
+            empty($donnees['loyer'])) {
             throw new Exception("Tous les champs obligatoires doivent être remplis");
         }
         

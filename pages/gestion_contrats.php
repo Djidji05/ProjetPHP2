@@ -117,11 +117,23 @@ $contrats = $stmt->fetchAll();
                                 </div>
                             <?php endif; ?>
 
-                            <?php if (isset($_GET['success'])): ?>
+                            <?php 
+                            // Afficher les messages de succès/erreur de la session
+                            if (isset($_SESSION['success'])): 
+                            ?>
                                 <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                    Le contrat a été créé avec succès !
+                                    <?= htmlspecialchars($_SESSION['success']) ?>
                                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
+                                <?php unset($_SESSION['success']); ?>
+                            <?php endif; ?>
+                            
+                            <?php if (isset($_SESSION['error'])): ?>
+                                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                    <?= htmlspecialchars($_SESSION['error']) ?>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                                <?php unset($_SESSION['error']); ?>
                             <?php endif; ?>
 
                             <div class="table-responsive">
@@ -167,10 +179,12 @@ $contrats = $stmt->fetchAll();
                                                     <a href="generer_pdf_contrat.php?id=<?= $contrat['id'] ?>" class="btn btn-secondary btn-sm" title="Télécharger PDF">
                                                         <i class="bi bi-file-earmark-pdf"></i>
                                                     </a>
+                                                    <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'administrateur')): ?>
                                                     <button class="btn btn-danger btn-sm" title="Supprimer" 
                                                             onclick="confirmerSuppression(<?= $contrat['id'] ?>)">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -203,16 +217,144 @@ $contrats = $stmt->fetchAll();
 
         function confirmerSuppression(idContrat) {
             if (confirm('Êtes-vous sûr de vouloir supprimer définitivement ce contrat ? Cette action est irréversible.')) {
-                // Rediriger vers l'action de suppression avec l'ID du contrat
-                window.location.href = '../actions/supprimer_contrat.php?id=' + idContrat;
+                // Créer un formulaire pour envoyer la requête POST avec le token CSRF
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '../ajax/supprimer_contrat.php';
+                
+                // Ajouter le token CSRF
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                
+                // Créer les champs cachés
+                const idField = document.createElement('input');
+                idField.type = 'hidden';
+                idField.name = 'id';
+                idField.value = idContrat;
+                
+                const csrfField = document.createElement('input');
+                csrfField.type = 'hidden';
+                csrfField.name = 'csrf_token';
+                csrfField.value = csrfToken;
+                
+                // Ajouter les champs au formulaire
+                form.appendChild(idField);
+                form.appendChild(csrfField);
+                
+                // Ajouter le formulaire à la page et le soumettre
+                document.body.appendChild(form);
+                
+                // Soumettre le formulaire de manière asynchrone
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Afficher le message de succès
+                        showAlert(data.message, 'success');
+                        // Recharger la page après un court délai
+                        setTimeout(() => {
+                            window.location.href = data.redirect || window.location.href;
+                        }, 1500);
+                    } else {
+                        // Afficher le message d'erreur
+                        showAlert(data.message || 'Une erreur est survenue lors de la suppression du contrat.', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    showAlert('Une erreur est survenue lors de la communication avec le serveur.', 'danger');
+                })
+                .finally(() => {
+                    // Supprimer le formulaire
+                    document.body.removeChild(form);
+                });
+            }
+        }
+        
+        // Fonction utilitaire pour afficher des messages
+        function showAlert(message, type = 'info') {
+            // Créer l'alerte
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.role = 'alert';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            // Ajouter l'alerte en haut de la page
+            const container = document.querySelector('.card-body');
+            if (container) {
+                container.insertBefore(alertDiv, container.firstChild);
+                
+                // Fermer automatiquement après 5 secondes
+                setTimeout(() => {
+                    const bsAlert = new bootstrap.Alert(alertDiv);
+                    bsAlert.close();
+                }, 5000);
             }
         }
     </script>
 
+    <!-- Charger jQuery avant Bootstrap (si nécessaire) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Charger les scripts Bootstrap -->
     <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="assets/vendor/php-email-form/validate.js"></script>
     
     <script>
+    // Initialiser les composants Bootstrap
+    document.addEventListener('DOMContentLoaded', function() {
+        // Activer les tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Activer les popovers
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+        
+        // Activer les menus déroulants de la sidebar
+        var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
+        var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
+            return new bootstrap.Dropdown(dropdownToggleEl);
+        });
+        
+        // Activer le menu utilisateur dans la barre de navigation
+        var userDropdownElement = document.querySelector('.header-nav .dropdown-toggle');
+        if (userDropdownElement) {
+            new bootstrap.Dropdown(userDropdownElement);
+        }
+        
+        // Gestion du toggle de la sidebar
+        const sidebar = document.querySelector('.sidebar');
+        const toggleSidebarBtn = document.querySelector('.toggle-sidebar-btn');
+        if (toggleSidebarBtn && sidebar) {
+            toggleSidebarBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                sidebar.classList.toggle('toggle-sidebar');
+                // Sauvegarder l'état dans le localStorage
+                if (sidebar.classList.contains('toggle-sidebar')) {
+                    localStorage.setItem('sidebarCollapsed', 'true');
+                } else {
+                    localStorage.removeItem('sidebarCollapsed');
+                }
+            });
+            
+            // Restaurer l'état de la sidebar
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                sidebar.classList.add('toggle-sidebar');
+            }
+        }
+    });
+    
+    // Scripts personnalisés
+    document.addEventListener('DOMContentLoaded', function() {
     // Gestion de la recherche en temps réel avec délai
     let searchTimeout;
     document.getElementById('searchInput').addEventListener('input', function(e) {

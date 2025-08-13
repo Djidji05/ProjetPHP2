@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('csrf_token', csrfToken);
                 
                 // Envoyer la requête de suppression
-                fetch(`/ANACAONA/api/delete_appartement.php?id=${id}`, {
+                fetch(`../api/delete_appartement.php?id=${id}`, {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',

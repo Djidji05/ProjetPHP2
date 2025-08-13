@@ -54,7 +54,7 @@ if (empty($contratsActifs)) {
 // Tenter de supprimer l'appartement
 echo "<h2>Tentative de suppression</h2>";
 try {
-    $result = $appartementController->supprimerAppartement($appartementId);
+    $result = $appartementController->deleteAppartement($appartementId);
     if ($result) {
         echo "<div style='color:green;'>L'appartement a été supprimé avec succès.</div>";
     } else {

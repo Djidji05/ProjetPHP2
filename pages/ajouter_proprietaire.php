@@ -180,80 +180,80 @@ try {
                                 <label for="civilite" class="form-label">Civilité</label>
                                 <select class="form-select" id="civilite" name="civilite" required>
                                     <?php foreach ($civilites as $value => $label): ?>
-                                        <option value="<?= $value ?>" <?= ($donnees['civilite'] === $value) ? 'selected' : '' ?>><?= $label ?></option>
+                                        <option value="<?= $value ?>" <?= (isset($donnees['civilite']) && $donnees['civilite'] === $value) ? 'selected' : '' ?>><?= $label ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             
                             <div class="col-md-5">
                                 <label for="nom" class="form-label">Nom</label>
-                                <input type="text" class="form-control" id="nom" name="nom" value="<?= htmlspecialchars($donnees['nom']) ?>" required>
+                                <input type="text" class="form-control" id="nom" name="nom" value="<?= isset($donnees['nom']) ? htmlspecialchars($donnees['nom']) : '' ?>" required>
                                 <div class="invalid-feedback">Veuillez entrer le nom.</div>
                             </div>
                             
                             <div class="col-md-5">
                                 <label for="prenom" class="form-label">Prénom</label>
-                                <input type="text" class="form-control" id="prenom" name="prenom" value="<?= htmlspecialchars($donnees['prenom']) ?>" required>
+                                <input type="text" class="form-control" id="prenom" name="prenom" value="<?= isset($donnees['prenom']) ? htmlspecialchars($donnees['prenom']) : '' ?>" required>
                                 <div class="invalid-feedback">Veuillez entrer le prénom.</div>
                             </div>
                             
                             <div class="col-md-6">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="<?= htmlspecialchars($donnees['email']) ?>">
+                                <input type="email" class="form-control" id="email" name="email" value="<?= isset($donnees['email']) ? htmlspecialchars($donnees['email']) : '' ?>">
                             </div>
                             
                             <div class="col-md-6">
                                 <label for="telephone" class="form-label">Téléphone</label>
-                                <input type="tel" class="form-control" id="telephone" name="telephone" value="<?= htmlspecialchars($donnees['telephone']) ?>">
+                                <input type="tel" class="form-control" id="telephone" name="telephone" value="<?= isset($donnees['telephone']) ? htmlspecialchars($donnees['telephone']) : '' ?>">
                             </div>
                             
                             <div class="col-12">
                                 <label for="adresse" class="form-label">Adresse</label>
-                                <input type="text" class="form-control" id="adresse" name="adresse" value="<?= htmlspecialchars($donnees['adresse']) ?>">
+                                <input type="text" class="form-control" id="adresse" name="adresse" value="<?= isset($donnees['adresse']) ? htmlspecialchars($donnees['adresse']) : '' ?>">
                             </div>
                             
                             <div class="col-md-3">
                                 <label for="code_postal" class="form-label">Code postal</label>
-                                <input type="text" class="form-control" id="code_postal" name="code_postal" value="<?= htmlspecialchars($donnees['code_postal']) ?>">
+                                <input type="text" class="form-control" id="code_postal" name="code_postal" value="<?= isset($donnees['code_postal']) ? htmlspecialchars($donnees['code_postal']) : '' ?>">
                             </div>
                             
                             <div class="col-md-5">
                                 <label for="ville" class="form-label">Ville</label>
-                                <input type="text" class="form-control" id="ville" name="ville" value="<?= htmlspecialchars($donnees['ville']) ?>">
+                                <input type="text" class="form-control" id="ville" name="ville" value="<?= isset($donnees['ville']) ? htmlspecialchars($donnees['ville']) : '' ?>">
                             </div>
                             
                             <div class="col-md-4">
                                 <label for="pays" class="form-label">Pays</label>
-                                <input type="text" class="form-control" id="pays" name="pays" value="<?= htmlspecialchars($donnees['pays']) ?>">
+                                <input type="text" class="form-control" id="pays" name="pays" value="<?= isset($donnees['pays']) ? htmlspecialchars($donnees['pays']) : 'France' ?>">
                             </div>
                             
                             <div class="col-md-4">
                                 <label for="date_naissance" class="form-label">Date de naissance</label>
-                                <input type="date" class="form-control" id="date_naissance" name="date_naissance" value="<?= $donnees['date_naissance'] ?>">
+                                <input type="date" class="form-control" id="date_naissance" name="date_naissance" value="<?= isset($donnees['date_naissance']) ? $donnees['date_naissance'] : '' ?>">
                             </div>
                             
                             <div class="col-md-4">
                                 <label for="lieu_naissance" class="form-label">Lieu de naissance</label>
-                                <input type="text" class="form-control" id="lieu_naissance" name="lieu_naissance" value="<?= htmlspecialchars($donnees['lieu_naissance']) ?>">
+                                <input type="text" class="form-control" id="lieu_naissance" name="lieu_naissance" value="<?= isset($donnees['lieu_naissance']) ? htmlspecialchars($donnees['lieu_naissance']) : '' ?>">
                             </div>
                             
                             <div class="col-md-4">
                                 <label for="nationalite" class="form-label">Nationalité</label>
-                                <input type="text" class="form-control" id="nationalite" name="nationalite" value="<?= htmlspecialchars($donnees['nationalite']) ?>">
+                                <input type="text" class="form-control" id="nationalite" name="nationalite" value="<?= isset($donnees['nationalite']) ? htmlspecialchars($donnees['nationalite']) : '' ?>">
                             </div>
                             
                             <div class="col-md-6">
                                 <label for="piece_identite" class="form-label">Type de pièce d'identité</label>
                                 <select class="form-select" id="piece_identite" name="piece_identite">
                                     <?php foreach ($pieces_identite as $value => $label): ?>
-                                        <option value="<?= $value ?>" <?= ($donnees['piece_identite'] === $value) ? 'selected' : '' ?>><?= $label ?></option>
+                                        <option value="<?= $value ?>" <?= (isset($donnees['piece_identite']) && $donnees['piece_identite'] === $value) ? 'selected' : '' ?>><?= $label ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             
                             <div class="col-md-6">
                                 <label for="numero_identite" class="form-label">Numéro de pièce d'identité</label>
-                                <input type="text" class="form-control" id="numero_identite" name="numero_identite" value="<?= htmlspecialchars($donnees['numero_identite']) ?>">
+                                <input type="text" class="form-control" id="numero_identite" name="numero_identite" value="<?= isset($donnees['numero_identite']) ? htmlspecialchars($donnees['numero_identite']) : '' ?>">
                             </div>
                             
                             <div class="text-center mt-4">

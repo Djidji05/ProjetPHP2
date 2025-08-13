@@ -39,16 +39,22 @@ $occupationData = '[]';
 if (isset($stats['revenus_mois_courant_data'])) {
     $revenusMoisLabels = json_encode($stats['revenus_mois_courant_data']['labels'] ?? []);
     $revenusMoisData = json_encode($stats['revenus_mois_courant_data']['data'] ?? []);
+    error_log('Revenus Mois Labels: ' . $revenusMoisLabels);
+    error_log('Revenus Mois Data: ' . $revenusMoisData);
 }
 
 if (isset($stats['depenses_par_categorie'])) {
     $depensesCategoriesLabels = json_encode($stats['depenses_par_categorie']['labels'] ?? []);
     $depensesCategoriesData = json_encode($stats['depenses_par_categorie']['data'] ?? []);
+    error_log('Dépenses Catégories Labels: ' . $depensesCategoriesLabels);
+    error_log('Dépenses Catégories Data: ' . $depensesCategoriesData);
 }
 
 if (isset($stats['occupation_par_immeuble'])) {
     $occupationLabels = json_encode($stats['occupation_par_immeuble']['labels'] ?? []);
     $occupationData = json_encode($stats['occupation_par_immeuble']['data'] ?? []);
+    error_log('Occupation Labels: ' . $occupationLabels);
+    error_log('Occupation Data: ' . $occupationData);
 }
 
 // Initialisation de la connexion PDO
@@ -369,7 +375,7 @@ function getIconeTendance($valeur) {
       </div>
 
                   
-      <!-- Scripts pour les graphiques -->
+      <!-- Script ApexCharts sera chargé dans le footer -->
       <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
       <script>
       document.addEventListener('DOMContentLoaded', function() {
@@ -710,36 +716,319 @@ function getIconeTendance($valeur) {
         console.error('Aucun sous-menu trouvé');
       }
     }
+    
+    // Fonction pour formater les nombres avec séparateur de milliers
+    function formatNumber(num) {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    }
   </script>
 
   <!-- ======= Graphiques avec ApexCharts ======= -->
-  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script>
-  // Vérification des données pour le débogage
-  console.log('=== DÉBOGAGE GRAPHIQUE DES REVENUS ===');
-  
-  // Afficher les données brutes reçues de PHP
+  // Données pour les graphiques
   var revenusData = <?= $revenusMoisData ?>;
   var revenusLabels = <?= $revenusMoisLabels ?>;
+  var depensesData = <?= $depensesCategoriesData ?>;
+  var depensesLabels = <?= $depensesCategoriesLabels ?>;
+  var occupationData = <?= $occupationData ?>;
+  var occupationLabels = <?= $occupationLabels ?>;
   
-  console.log('Données des revenus (PHP):', revenusData);
-  console.log('Labels des revenus (PHP):', revenusLabels);
-  console.log('Type des données:', typeof revenusData[0]);
-  console.log('Type des labels:', typeof revenusLabels[0]);
+  // Vérification des données pour le débogage
+  console.log('Données des revenus:', revenusData);
+  console.log('Labels des revenus:', revenusLabels);
+  console.log('Données des dépenses:', depensesData);
+  console.log('Labels des dépenses:', depensesLabels);
+  console.log('Données d\'occupation:', occupationData);
+  console.log('Labels d\'occupation:', occupationLabels);
   
-  // Vérification de l'existence de l'élément du graphique
-  console.log('Élément du graphique des revenus trouvé:', !!document.querySelector('#revenueChart'));
-  console.log('ApexCharts est disponible:', typeof ApexCharts !== 'undefined');
-
-  // Attente que le DOM soit complètement chargé
+  // Fonction pour initialiser les graphiques
+  function initCharts() {
+    // Vérification des conteneurs
+    if (!document.getElementById('revenueChart') || !document.getElementById('expenseChart') || !document.getElementById('occupationChart')) {
+      console.error('Un ou plusieurs conteneurs de graphiques sont manquants');
+      return false;
+    }
+    
+    // Initialisation du graphique des revenus
+    initRevenueChart();
+    
+    // Initialisation du graphique des dépenses
+    initExpenseChart();
+    
+    // Initialisation du graphique d'occupation
+    initOccupationChart();
+    
+    return true;
+  }
+  
+  // Fonction pour initialiser le graphique des revenus
+  function initRevenueChart() {
+    try {
+      const container = document.getElementById('revenueChart');
+      if (!container) {
+        console.error('Conteneur du graphique des revenus non trouvé');
+        return;
+      }
+      
+      // Vérifier si on a des données
+      if (!revenusData || !Array.isArray(revenusData) || revenusData.length === 0 || 
+          !revenusLabels || !Array.isArray(revenusLabels) || revenusLabels.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Aucune donnée de revenus disponible pour le moment</div>';
+        return;
+      }
+      
+      // Options du graphique des revenus
+      var options = {
+        series: [{
+          name: 'Revenus',
+          data: Array.isArray(revenusData) ? revenusData : []
+        }],
+        chart: {
+          type: 'bar',
+          height: 350,
+          toolbar: { show: true }
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 4,
+            horizontal: false
+          }
+        },
+        dataLabels: { enabled: false },
+        xaxis: {
+          categories: Array.isArray(revenusLabels) ? revenusLabels : [],
+          title: { text: 'Jours du mois' }
+        },
+        yaxis: {
+          title: { text: 'Montant (€)' },
+          labels: {
+            formatter: function(value) {
+              return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR', minimumFractionDigits: 0});
+            }
+          }
+        },
+        tooltip: {
+          y: {
+            formatter: function(value) {
+              return value.toLocaleString('fr-FR', {style: 'currency', currency: 'EUR', minimumFractionDigits: 2});
+            }
+          }
+        }
+      };
+      
+      // Création du graphique
+      var chart = new ApexCharts(document.querySelector("#revenueChart"), options);
+      chart.render();
+      
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du graphique des revenus:', error);
+      document.getElementById('revenueChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement des données des revenus</div>';
+    }
+  }
+  
+  // Fonction pour initialiser le graphique des dépenses
+  function initExpenseChart() {
+    try {
+      const container = document.getElementById('expenseChart');
+      if (!container) {
+        console.error('Conteneur du graphique des dépenses non trouvé');
+        return;
+      }
+      
+      // Vérifier si on a des données
+      if (!depensesData || !Array.isArray(depensesData) || depensesData.length === 0 || 
+          !depensesLabels || !Array.isArray(depensesLabels) || depensesLabels.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Aucune donnée de dépenses disponible pour le moment</div>';
+        return;
+      }
+      
+      // Options du graphique des dépenses
+      var options = {
+        series: Array.isArray(depensesData) ? depensesData : [],
+        chart: {
+          type: 'donut',
+          height: 350
+        },
+        labels: Array.isArray(depensesLabels) ? depensesLabels : [],
+        legend: {
+          position: 'bottom'
+        },
+        responsive: [{
+          breakpoint: 480,
+          options: {
+            chart: {
+              width: 200
+            },
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }]
+      };
+      
+      // Création du graphique
+      var chart = new ApexCharts(document.querySelector("#expenseChart"), options);
+      chart.render();
+      
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du graphique des dépenses:', error);
+      document.getElementById('expenseChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement des données des dépenses</div>';
+    }
+  }
+  
+  // Fonction pour initialiser le graphique d'occupation
+  function initOccupationChart() {
+    try {
+      const container = document.getElementById('occupationChart');
+      if (!container) {
+        console.error('Conteneur du graphique d\'occupation non trouvé');
+        return;
+      }
+      
+      // Vérifier si on a des données
+      if (!occupationData || !Array.isArray(occupationData) || occupationData.length === 0 || 
+          !occupationLabels || !Array.isArray(occupationLabels) || occupationLabels.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Aucune donnée d\'occupation disponible pour le moment</div>';
+        return;
+      }
+      
+      // Options du graphique d'occupation
+      var options = {
+        series: [{
+          name: 'Taux d\'occupation',
+          data: Array.isArray(occupationData) ? occupationData : []
+        }],
+        chart: {
+          type: 'bar',
+          height: 350,
+          toolbar: { show: true }
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 4,
+            horizontal: true
+          }
+        },
+        dataLabels: { enabled: false },
+        xaxis: {
+          categories: Array.isArray(occupationLabels) ? occupationLabels : [],
+          title: { text: 'Taux d\'occupation (%)' },
+          max: 100
+        },
+        yaxis: {
+          title: { text: 'Immeuble' }
+        }
+      };
+      
+      // Création du graphique
+      var chart = new ApexCharts(document.querySelector("#occupationChart"), options);
+      chart.render();
+      
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du graphique d\'occupation:', error);
+      document.getElementById('occupationChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement des données d\'occupation</div>';
+    }
+  }
+  
+  // Fonction pour initialiser tous les graphiques
+  function initializeAllCharts() {
+    try {
+      console.log('Initialisation des graphiques...');
+      
+      // Vérifier si les conteneurs existent
+      const charts = [
+        { id: 'revenueChart', name: 'Revenus' },
+        { id: 'expenseChart', name: 'Dépenses' },
+        { id: 'occupationChart', name: 'Occupation' }
+      ];
+      
+      let allContainersExist = true;
+      charts.forEach(chart => {
+        const element = document.getElementById(chart.id);
+        if (!element) {
+          console.error(`Conteneur du graphique ${chart.name} non trouvé`);
+          allContainersExist = false;
+        }
+      });
+      
+      if (!allContainersExist) {
+        console.error('Certains conteneurs de graphiques sont manquants');
+        return;
+      }
+      
+      // Initialiser chaque graphique avec gestion des erreurs
+      if (typeof initRevenueChart === 'function') {
+        try {
+          initRevenueChart();
+        } catch (e) {
+          console.error('Erreur lors de l\'initialisation du graphique des revenus:', e);
+          document.getElementById('revenueChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement du graphique des revenus</div>';
+        }
+      }
+      
+      if (typeof initExpenseChart === 'function') {
+        try {
+          initExpenseChart();
+        } catch (e) {
+          console.error('Erreur lors de l\'initialisation du graphique des dépenses:', e);
+          document.getElementById('expenseChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement du graphique des dépenses</div>';
+        }
+      }
+      
+      if (typeof initOccupationChart === 'function') {
+        try {
+          initOccupationChart();
+        } catch (e) {
+          console.error('Erreur lors de l\'initialisation du graphique d\'occupation:', e);
+          document.getElementById('occupationChart').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement du graphique d\'occupation</div>';
+        }
+      }
+      
+      console.log('Initialisation des graphiques terminée');
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation des graphiques:', error);
+    }
+  }
+  
+  // Initialisation des graphiques au chargement du DOM
   document.addEventListener('DOMContentLoaded', function() {
-    // Délai supplémentaire pour s'assurer que tout est chargé
-    setTimeout(initializeCharts, 500);
+    console.log('DOM chargé, initialisation des graphiques...');
+    
+    // Délai pour s'assurer que tous les éléments sont chargés
+    setTimeout(initializeAllCharts, 500);
+    
+    // Réessayer après 2 secondes au cas où il y aurait un délai de chargement
+    setTimeout(initializeAllCharts, 2000);
   });
+  
+  // Exposer la fonction pour un éventuel rechargement manuel
+  window.initializeAllCharts = initializeAllCharts;
 
   function initializeCharts() {
-    // Vérification de l'existence des conteneurs
-    if (!document.querySelector("#revenueChart") || !document.querySelector("#expenseChart") || !document.querySelector("#occupationChart")) {
+    // Vérification de l'existence des conteneurs avec délai
+    function checkContainers() {
+      const containers = [
+        { id: 'revenueChart', name: 'Revenus' },
+        { id: 'expenseChart', name: 'Dépenses' },
+        { id: 'occupationChart', name: 'Occupation' }
+      ];
+      
+      let allContainersExist = true;
+      
+      containers.forEach(container => {
+        const element = document.getElementById(container.id);
+        if (!element) {
+          console.error(`Conteneur ${container.name} (#${container.id}) est manquant`);
+          allContainersExist = false;
+        } else {
+          console.log(`Conteneur ${container.name} (#${container.id}) trouvé`);
+        }
+      });
+      
+      return allContainersExist;
+    }
+    
+    if (!checkContainers()) {
       console.error("Un ou plusieurs conteneurs de graphiques sont manquants");
       return;
     }
@@ -1134,8 +1423,15 @@ function getIconeTendance($valeur) {
     } catch (error) {
       console.error("Erreur lors de l'initialisation du graphique d'occupation:", error);
     }
-  } // Fin de la fonction initializeCharts
-});
+  // Fonction utilitaire pour formater les montants
+  function formatMontant(value) {
+    if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'K €';
+    }
+    return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €';
+  }
+  
+  // Fin du script
 </script>
 
 </body>

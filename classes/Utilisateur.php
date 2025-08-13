@@ -63,13 +63,16 @@ class Utilisateur {
                     VALUES(:nom, :prenom, :email, :sexe, :nomutilisateur, :motdepasse, :role)
                 ");
 
+                // Hachage du mot de passe avant stockage
+                $motdepasse_hash = password_hash($motdepasse, PASSWORD_DEFAULT);
+                
                 $resultat = $requete->execute([
                     ':nom' => $nom,
                     ':prenom' => $prenom,
                     ':email' => $email,
                     ':sexe' => $sexe_valide,
                     ':nomutilisateur' => $nomutilisateur,
-                    ':motdepasse' => $motdepasse, // Stockage en clair
+                    ':motdepasse' => $motdepasse_hash, // Stockage du hash
                     ':role' => $role
                 ]);
 
@@ -93,18 +96,25 @@ class Utilisateur {
             exit();
         }
 }
-    // Connexion simplifiée sans hachage
+    // Connexion avec vérification de mot de passe haché
     public function login($username, $password) {
         try {
-            $sql = "SELECT * FROM utilisateurs WHERE nomutilisateur = :username AND motdepasse = :password LIMIT 1";
+            // D'abord, on récupère l'utilisateur par son nom d'utilisateur uniquement
+            $sql = "SELECT * FROM utilisateurs WHERE nomutilisateur = :username LIMIT 1";
             $stmt = $this->pdo->prepare($sql);
             $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-            $stmt->bindParam(':password', $password, PDO::PARAM_STR);
             $stmt->execute();
             
             if ($stmt->rowCount() === 1) {
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                return $user;
+                
+                // Vérifier si le mot de passe fourni correspond au hash stocké
+                if (password_verify($password, $user['motdepasse'])) {
+                    // Si le mot de passe est correct, on retourne les infos de l'utilisateur
+                    return $user;
+                } else {
+                    error_log("Mot de passe incorrect pour l'utilisateur: " . $username);
+                }
             } else {
                 error_log("Aucun utilisateur trouvé avec le nom: " . $username);
             }
@@ -158,6 +168,10 @@ class Utilisateur {
     public function modifierAvecMotDePasse($id, $nom, $prenom, $email, $sexe, $nomutilisateur, $role, $motdepasse) {
         // Validation du sexe
         $sexe_valide = in_array($sexe, ['H', 'F', 'Autre']) ? $sexe : 'Autre';
+        
+        // Hachage du nouveau mot de passe
+        $motdepasse_hash = password_hash($motdepasse, PASSWORD_DEFAULT);
+        
         $sql = "UPDATE utilisateurs SET 
                     nom = :nom, 
                     prenom = :prenom, 
@@ -174,10 +188,10 @@ class Utilisateur {
             'nom' => $nom,
             'prenom' => $prenom,
             'email' => $email,
-            'sexe' => $sexe,
+            'sexe' => $sexe_valide,
             'nomutilisateur' => $nomutilisateur,
             'role' => $role,
-            'motdepasse' => $motdepasse
+            'motdepasse' => $motdepasse_hash
         ]);
     }
 

@@ -81,12 +81,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Si pas d'erreurs, procéder à la modification
     if (empty($erreurs)) {
-        if ($contratController->modifierContrat($contratId, $donnees)) {
-            // Rediriger vers la page de détail avec un message de succès
-            header('Location: voir_contrat.php?id=' . $contratId . '&success=1');
-            exit();
-        } else {
-            $erreurs[] = "Une erreur est survenue lors de la modification du contrat";
+        try {
+            if ($contratController->modifierContrat($contratId, $donnees)) {
+                // Rediriger vers la page de détail avec un message de succès
+                $_SESSION['success_message'] = "Le contrat a été modifié avec succès.";
+                header('Location: voir_contrat.php?id=' . $contratId);
+                exit();
+            } else {
+                $erreurs[] = "Une erreur inconnue est survenue lors de la modification du contrat.";
+            }
+        } catch (Exception $e) {
+            // Capturer et afficher le message d'erreur détaillé
+            $errorMessage = $e->getMessage();
+            error_log("Erreur lors de la modification du contrat #$contratId: " . $errorMessage);
+            
+            // Ajouter un message d'erreur plus convivial pour l'utilisateur
+            if (strpos($errorMessage, 'appartement est déjà loué') !== false) {
+                $erreurs[] = "L'appartement est déjà loué pour la période sélectionnée. Veuillez choisir une autre période.";
+            } else {
+                $erreurs[] = "Une erreur est survenue lors de la modification du contrat : " . $errorMessage;
+            }
+            
+            // Conserver les valeurs du formulaire en cas d'erreur
+            $_SESSION['form_data'] = $donnees;
         }
     }
 }

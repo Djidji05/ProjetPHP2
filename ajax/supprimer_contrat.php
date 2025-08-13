@@ -40,16 +40,35 @@ try {
     $contratController = new ContratController();
     
     // Tenter de supprimer le contrat
-    $resultat = $contratController->supprimerContrat($contratId);
+    $resultat = $contratController->supprimerContrat($contratId, null, true);
     
-    if ($resultat) {
+    // Si le résultat est un tableau (pour les retours JSON)
+    if (is_array($resultat)) {
+        // Si c'est une erreur, on renvoie le message d'erreur
+        if (isset($resultat['success']) && !$resultat['success']) {
+            http_response_code(400); // Bad Request
+            echo json_encode([
+                'success' => false,
+                'message' => $resultat['message']
+            ]);
+            exit;
+        }
+        // Si c'est un succès, on renvoie la réponse de succès
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Le contrat a été supprimé avec succès',
+            'redirect' => 'gestion_contrats.php?success=contrat_supprime'
+        ]);
+    } 
+    // Si le résultat est un booléen (pour la rétrocompatibilité)
+    elseif ($resultat === true) {
         echo json_encode([
             'success' => true, 
             'message' => 'Le contrat a été supprimé avec succès',
             'redirect' => 'gestion_contrats.php?success=contrat_supprime'
         ]);
     } else {
-        throw new Exception('La suppression du contrat a échoué');
+        throw new Exception('La suppression du contrat a échoué sans message d\'erreur spécifique.');
     }
     
 } catch (Exception $e) {

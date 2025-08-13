@@ -57,15 +57,16 @@ BEGIN
     SET @utilisateur_courant = IFNULL(@utilisateur_courant, 1);
     SET @raison_suppression = IFNULL(@raison_suppression, 'Suppression manuelle');
     
+    -- Utiliser les champs corrects de la table appartements
     INSERT INTO `appartements_archives` (
         `id`, `proprietaire_id`, `adresse`, `code_postal`, `ville`,
         `type_appartement`, `surface`, `nombre_pieces`, `etage`, `ascenseur`,
         `loyer_mensuel`, `charges_mensuelles`, `date_creation`, `date_suppression`,
         `raison_suppression`, `supprime_par`
     ) VALUES (
-        OLD.`id`, OLD.`id_proprietaire`, OLD.`adresse`, OLD.`code_postal`, OLD.`ville`,
+        OLD.`id`, OLD.`proprietaire_id`, OLD.`adresse`, OLD.`code_postal`, OLD.`ville`,
         OLD.`type`, OLD.`surface`, OLD.`pieces`, OLD.`etage`, IFNULL(OLD.`ascenseur`, 0),
-        OLD.`loyer`, IFNULL(OLD.`charges`, 0.00), NOW(), NOW(),
+        OLD.`loyer`, IFNULL(OLD.`charges`, 0.00), OLD.`date_creation`, NOW(),
         @raison_suppression, @utilisateur_courant
     );
 END//
@@ -97,6 +98,7 @@ BEGIN
     SET @utilisateur_courant = IFNULL(@utilisateur_courant, 1);
     SET @raison_suppression = IFNULL(@raison_suppression, 'Suppression manuelle');
     
+    -- Utiliser les champs corrects de la table contrats
     INSERT INTO `contrats_archives` (
         `id`, `locataire_id`, `appartement_id`, `date_debut`, `date_fin`,
         `loyer_mensuel`, `charges_mensuelles`, `depot_garantie`, `etat_lieu_entree`,
@@ -104,8 +106,8 @@ BEGIN
         `raison_suppression`, `supprime_par`
     ) VALUES (
         OLD.`id`, OLD.`id_locataire`, OLD.`id_appartement`, OLD.`date_debut`, OLD.`date_fin`,
-        OLD.`loyer`, 0.00, OLD.`depot_garantie`, NULL,
-        NULL, OLD.`statut`, NOW(), NOW(),
+        OLD.`loyer`, IFNULL(OLD.`charges_mensuelles`, 0.00), IFNULL(OLD.`depot_garantie`, 0.00), NULL,
+        NULL, IFNULL(OLD.`statut`, 'inconnu'), NOW(), NOW(),
         @raison_suppression, @utilisateur_courant
     );
 END//

@@ -81,12 +81,7 @@ function isActive($page) {
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
         <li class="nav-heading">ADMINISTRATION</li>
         
-        <!-- Archives (uniquement pour les administrateurs) -->
         <li class="nav-item">
-            <a class="nav-link <?= isActive('archives.php') ? 'active' : '' ?>" href="archives.php">
-                <i class="bi bi-archive"></i>
-                <span>Archives</span>
-            </a>
         </li>
 
         <li class="nav-item">

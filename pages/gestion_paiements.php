@@ -187,6 +187,55 @@ error_log("Contenu de \$paiements: " . print_r($paiements, true));
     <?php include("../includes/scripts.php"); ?>
     
     <script>
+    // Charger jQuery avant Bootstrap (si nécessaire)
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Charger les scripts Bootstrap -->
+    <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/vendor/php-email-form/validate.js"></script>
+    
+    <script>
+    // Initialiser les composants Bootstrap
+    document.addEventListener('DOMContentLoaded', function() {
+        // Activer le menu utilisateur dans la barre de navigation
+        var userDropdownElement = document.querySelector('.header-nav .dropdown-toggle');
+        if (userDropdownElement) {
+            new bootstrap.Dropdown(userDropdownElement);
+        }
+        
+        // Activer les tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Activer les popovers
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+        
+        // Gestion du toggle de la sidebar
+        const sidebar = document.querySelector('.sidebar');
+        const toggleSidebarBtn = document.querySelector('.toggle-sidebar-btn');
+        if (toggleSidebarBtn && sidebar) {
+            toggleSidebarBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                sidebar.classList.toggle('toggle-sidebar');
+                // Sauvegarder l'état dans le localStorage
+                if (sidebar.classList.contains('toggle-sidebar')) {
+                    localStorage.setItem('sidebarCollapsed', 'true');
+                } else {
+                    localStorage.removeItem('sidebarCollapsed');
+                }
+            });
+            
+            // Restaurer l'état de la sidebar
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                sidebar.classList.add('toggle-sidebar');
+            }
+        }
+    });
+    
     // Gestion de la suppression d'un paiement
     document.addEventListener('DOMContentLoaded', function() {
         console.log('DOM chargé, initialisation de la gestion des suppressions...');

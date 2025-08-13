@@ -271,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['success_message'] = "L'appartement a été modifié avec succès.";
                 
                 // Debug: Afficher le chemin de redirection
-                $redirectUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/ANACAONA/pages/details_appartement.php?id=' . $appartementId;
+                $redirectUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/ProjetPHP2/pages/details_appartement.php?id=' . $appartementId;
                 error_log("Tentative de redirection vers : " . $redirectUrl);
                 
                 // Redirection avec URL complète

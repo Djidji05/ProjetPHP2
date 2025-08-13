@@ -401,44 +401,14 @@ $estActif = $dateFin > $aujourdhui;
     <?php include("footer.php"); ?>
     <!-- End Footer -->
     
-    <script>
-    // Fonction pour confirmer la résiliation du contrat
-    function confirmerResiliation(contratId) {
-        // Afficher le modal de résiliation
-        var modal = new bootstrap.Modal(document.getElementById('resilierContratModal'));
-        modal.show();
-    }
+    <!-- Inclure SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
-    // Gérer la soumission du formulaire de résiliation
-    document.getElementById('resilierContratForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Vérifier la confirmation
-        if (!document.getElementById('confirmation').checked) {
-            alert('Veuillez confirmer que vous souhaitez résilier le contrat.');
-            return false;
-        }
-        
-        // Vérifier la date de résiliation
-        const dateDebut = new Date('<?= $contrat['date_debut'] ?>');
-        const dateFin = new Date('<?= $contrat['date_fin'] ?>');
-        const dateResiliation = new Date(document.getElementById('date_resiliation').value);
-        
-        if (dateResiliation < dateDebut || dateResiliation > dateFin) {
-            alert('La date de résiliation doit être comprise entre le début et la fin du contrat.');
-            return false;
-        }
-        
-        // Afficher un message de confirmation
-        if (confirm('Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.')) {
-            // Soumettre le formulaire
-            this.submit();
-        }
-    });
-    </script>
-
     <script>
-        function confirmerResiliation(id) {
+    // Fonction unique pour gérer la résiliation du contrat
+    function confirmerResiliation(contratId) {
+        // Vérifier si SweetAlert est disponible
+        if (typeof Swal !== 'undefined') {
             Swal.fire({
                 title: 'Confirmer la résiliation',
                 text: 'Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.',
@@ -447,48 +417,28 @@ $estActif = $dateFin > $aujourdhui;
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#6c757d',
                 confirmButtonText: 'Oui, résilier',
-                cancelButtonText: 'Annuler'
+                cancelButtonText: 'Annuler',
+                allowOutsideClick: false
             }).then((result) => {
                 if (result.isConfirmed) {
                     // Rediriger vers la page de résiliation avec l'ID du contrat
-                    window.location.href = 'resilier_contrat.php?id=' + id;
+                    window.location.href = 'resilier_contrat.php?id=' + contratId;
                 }
             });
+        } else {
+            // Fallback si SweetAlert n'est pas disponible
+            if (confirm('Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.')) {
+                window.location.href = 'resilier_contrat.php?id=' + contratId;
+            }
         }
-    </script>
-    <script>
-    // Fonction pour confirmer la résiliation du contrat
-    function confirmerResiliation(contratId) {
-        // Afficher le modal de résiliation
-        var modal = new bootstrap.Modal(document.getElementById('resilierContratModal'));
-        modal.show();
     }
     
-    // Gérer la soumission du formulaire de résiliation
-    document.getElementById('resilierContratForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Vérifier la confirmation
-        if (!document.getElementById('confirmation').checked) {
-            alert('Veuillez confirmer que vous souhaitez résilier le contrat.');
-            return false;
-        }
-        
-        // Vérifier la date de résiliation
-        const dateDebut = new Date('<?= $contrat['date_debut'] ?>');
-        const dateFin = new Date('<?= $contrat['date_fin'] ?>');
-        const dateResiliation = new Date(document.getElementById('date_resiliation').value);
-        
-        if (dateResiliation < dateDebut || dateResiliation > dateFin) {
-            alert('La date de résiliation doit être comprise entre le début et la fin du contrat.');
-            return false;
-        }
-        
-        // Afficher un message de confirmation
-        if (confirm('Êtes-vous sûr de vouloir résilier ce contrat ? Cette action est irréversible.')) {
-            // Soumettre le formulaire
-            this.submit();
-        }
+    // Initialisation des tooltips Bootstrap
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
     </script>
 </body>

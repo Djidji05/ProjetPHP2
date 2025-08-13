@@ -43,8 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("La date de résiliation est requise");
         }
 
-        // Mettre à jour le contrat
-        $resultat = $contratController->resilierContrat($contratId, $dateResiliation, $motif, $commentaires);
+        // Mettre à jour le contrat en utilisant la première signature
+        // resilierContrat($idContrat, $dateResiliation, $raison = null, $commentaires = '', $idUtilisateur = null)
+        $resultat = $contratController->resilierContrat(
+            $contratId,           // ID du contrat
+            $dateResiliation,     // Date de résiliation
+            $motif,               // Raison de la résiliation
+            $commentaires,        // Commentaires
+            $_SESSION['user_id']  // ID de l'utilisateur effectuant la résiliation
+        );
         
         if ($resultat) {
             $_SESSION['success'] = "Le contrat a été résilié avec succès";

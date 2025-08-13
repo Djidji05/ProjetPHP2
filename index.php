@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANACAONA - Gestion Locative</title>
+    <title>Genius Agency - Gestion Locative</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
@@ -64,7 +64,7 @@
     <div class="container py-5">
         <div class="welcome-container mx-auto">
             <div class="welcome-header">
-                <h1 class="display-4 fw-bold">Bienvenue sur ANACAONA</h1>
+                <h1 class="display-4 fw-bold">Bienvenue sur Genius Agency</h1>
                 <p class="lead">Votre solution complète de gestion locative</p>
             </div>
             
@@ -107,7 +107,7 @@
                 </a>
                 
                 <div class="mt-4">
-                    <p class="text-muted">Vous n'avez pas de compte ? <a href="#" class="text-decoration-none">Contactez l'administrateur</a></p>
+                    <p class="text-muted">Vous n'avez pas de compte ? <a href="mailto:ndjivensly@gmail.com" class="text-decoration-none">Contactez l'administrateur</a></p>
                 </div>
             </div>
         </div>
